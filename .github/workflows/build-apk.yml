@@ -1,24 +1,25 @@
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+- name: Set up Android SDK
+  uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK packages
-        shell: bash
-        run: |
-          set -euo pipefail
+- name: Install Android SDK packages
+  shell: bash
+  run: |
+    set -euo pipefail
 
-          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+    SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
 
-          if [ ! -x "$SDKMANAGER" ]; then
-            SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" \
-              -type f -name sdkmanager -print -quit)"
-          fi
+    if [ ! -x "$SDKMANAGER" ]; then
+      SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" \
+        -type f -name sdkmanager -print -quit)"
+    fi
 
-          test -x "$SDKMANAGER"
+    if [ -z "$SDKMANAGER" ] || [ ! -x "$SDKMANAGER" ]; then
+      echo "sdkmanager not found"
+      exit 1
+    fi
 
-          yes | "$SDKMANAGER" --licenses >/dev/null || true
+    yes | "$SDKMANAGER" --licenses >/dev/null || true
 
-          "$SDKMANAGER" --install \
-            "platforms;android-34" \
-            "build-tools;34.0.0"
-
-          "$SDKMANAGER" --update
+    "$SDKMANAGER" --install \
+      "platforms;android-34" \
+      "build-tools;34.0.0"
