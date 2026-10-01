@@ -101,7 +101,7 @@ jobs:
         env:
           ANDROID_SDK_ROOT: /usr/lib/android-sdk
           ANDROID_HOME: /usr/lib/android-sdk
-          GRADLE_OPTS: -Xmx2048m -XX:MaxPermSize=512m
+          GRADLE_OPTS: -Xmx2048m
         working-directory: ./android
         run: |
           chmod +x gradlew
