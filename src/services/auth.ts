@@ -8,6 +8,7 @@ import {
   User 
 } from 'firebase/auth';
 import firebaseConfig from '../../firebase-applet-config.json';
+import { APP_ENV } from './environment';
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 export const auth = getAuth(app);
@@ -39,13 +40,11 @@ export const listenAuthState = (
 };
 
 export const isNativeEnvironment = (): boolean => {
-  if (typeof window === 'undefined') return false;
-  return (
-    !!(window as any).Capacitor ||
-    window.location.hostname === 'localhost' ||
-    window.location.protocol === 'capacitor:' ||
-    window.location.protocol === 'file:'
-  );
+  return APP_ENV.isAndroidApk;
+};
+
+export const isStandaloneEnvironment = (): boolean => {
+  return APP_ENV.isStandalone;
 };
 
 export const signInWithGoogle = async (): Promise<{ user: User; accessToken: string | null }> => {

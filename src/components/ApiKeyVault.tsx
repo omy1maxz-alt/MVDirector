@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ApiKeys, ApiKeySource } from '@/types';
 import { X, Key, Shield, Check, AlertCircle, LogOut, User as UserIcon, Loader2 } from 'lucide-react';
 import { signInWithGoogle, signOutGoogle, listenAuthState, isNativeEnvironment } from '@/services/auth';
+import { APP_ENV } from '@/services/environment';
 import type { User } from 'firebase/auth';
 
 interface ApiKeyVaultProps {
@@ -121,17 +122,22 @@ export const ApiKeyVault: React.FC<ApiKeyVaultProps> = ({ isOpen, onClose, curre
                   <span>Sign Out</span>
                 </button>
               </div>
-            ) : isNativeEnvironment() ? (
+            ) : APP_ENV.isStandalone ? (
               <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 space-y-2 text-xs">
-                <div className="flex items-center gap-2 text-amber-300 font-bold">
-                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
-                  <span>Android APK Standalone Mode</span>
+                <div className="flex items-center justify-between text-amber-300 font-bold">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span>{APP_ENV.environmentLabel}</span>
+                  </div>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    Outside Studio Sandbox
+                  </span>
                 </div>
                 <p className="text-[11px] text-white/70 leading-relaxed">
-                  Web popup login is disabled inside Android APK WebViews (which run on <code className="text-amber-300">https://localhost</code> and lack popup window handlers).
+                  Operating in standalone mode directly on your device with persistent storage ({APP_ENV.storageDescription}).
                 </p>
                 <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-[11px] font-medium leading-relaxed">
-                  ✨ <strong>No login required:</strong> You have 100% full access to all features (Production Director, Story Mode, Suno Music, Subtitles, Storyboard) via the <strong>Built-in API Key</strong> or <strong>Custom API Keys</strong> below!
+                  ✨ <strong>Full Access Enabled:</strong> All AI generation features (Director, Suno Music, Subtitles, Storyboard, Keyframes) run with 100% functionality via the <strong>Built-in API Key</strong> or your <strong>Custom API Keys</strong> below!
                 </div>
               </div>
             ) : (

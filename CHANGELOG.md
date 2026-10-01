@@ -1,4 +1,15 @@
+### Added
+- **Central Environment & Platform Awareness Service (`environment.ts`, `ApiKeyVault.tsx`, `logCapture.ts`, `App.tsx`)**:
+  - Implemented runtime environment detection (`APP_ENV`) distinguishing between Native Android APK (`Capacitor`/WebView), Installed PWA, Standalone Web, and Google AI Studio Preview Sandbox.
+  - Updated `ApiKeyVault.tsx` and top bar actions to recognize standalone execution outside the sandbox, highlighting persistent local device storage and 100% feature availability without login requirements.
+  - Updated media playback session metadata across the app from legacy `'AI Studio'` to `'MV Director'`.
+  - Added real-time environment status badges in the Settings menu, Web Test tab, and in-app Diagnostic Report for AI.
+
 ### Fixed
+- **Resolved `net::ERR_BLOCKED_BY_RESPONSE` Handling in WebView Tab (`BrowserTab.tsx`)**:
+  - Identified root cause of `net::ERR_BLOCKED_BY_RESPONSE` on `m.youtube.com`: YouTube's web servers strictly enforce `X-Frame-Options: SAMEORIGIN` on their homepage and portal pages, causing the Android Chromium engine to block third-party `<iframe>` embedding regardless of whether the app is on an APK.
+  - Implemented proactive detection in `BrowserTab.tsx` with clear explanations and 1-tap resolution buttons ("Open in System Browser" to bypass iframe headers via top-level window navigation, or "Test Video Embed Instead" using allowed `/embed/` endpoints).
+  - Updated presets bar so "YouTube Mobile (Pop-out)" directly opens in the system browser.
 - **Resolved React DOM Unknown Event Handler Warning onBuffer/onBufferEnd (`SubtitleTimelineEditor.tsx`, `App.tsx`)**:
   - Removed non-standard `onBuffer` and `onBufferEnd` props from `<Player />` that leaked into underlying `<video>` DOM elements in `react-player`'s fallback, eliminating `Warning: Unknown event handler property onBuffer/onBufferEnd`.
 

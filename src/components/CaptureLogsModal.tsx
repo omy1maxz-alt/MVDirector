@@ -285,8 +285,22 @@ export const CaptureLogsModal: React.FC<CaptureLogsModalProps> = ({ isOpen, onCl
                     <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">App Origin & Runtime</span>
                     <div className="space-y-1.5 text-[11px]">
                       <div className="flex justify-between py-1 border-b border-white/5">
+                        <span className="text-white/40">Platform:</span>
+                        <span className="font-bold text-emerald-400 truncate max-w-[200px]">{envDiag.runtime?.environmentLabel || 'Standalone'}</span>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-white/5">
+                        <span className="text-white/40">Sandbox Status:</span>
+                        <span className="font-bold text-teal-300">
+                          {envDiag.runtime?.isStandalone ? '✅ Outside Studio Sandbox' : 'Inside Studio Sandbox'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-white/5">
                         <span className="text-white/40">Origin:</span>
                         <span className="font-mono text-white/90 truncate max-w-[200px]">{envDiag.origin}</span>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-white/5">
+                        <span className="text-white/40">Storage Architecture:</span>
+                        <span className="font-mono text-white/80 truncate max-w-[200px]">{envDiag.runtime?.storageDescription || 'IndexedDB'}</span>
                       </div>
                       <div className="flex justify-between py-1 border-b border-white/5">
                         <span className="text-white/40">Protocol:</span>

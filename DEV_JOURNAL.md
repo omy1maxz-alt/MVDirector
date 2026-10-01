@@ -2,6 +2,38 @@
 
 ## Technical Constraints & Patterns
 
+### 114. Comprehensive Runtime & Platform Awareness Architecture (`environment.ts`, `ApiKeyVault.tsx`, `logCapture.ts`, `App.tsx`)
+- **Problem & Root Cause:**
+  - When the app is packaged and installed as a native Android APK (Capacitor/WebView) or hosted on a standalone domain outside Google AI Studio, legacy UI labels and sandbox restrictions previously assumed the app was running inside an iframe sandbox.
+  - Specifically:
+    1. Media metadata labeled albums as `'AI Studio'` instead of `'MV Director'`.
+    2. Header action showed a Google web popup button that attempted to open OAuth flows on `localhost` where `window.opener` does not exist.
+    3. The diagnostic reporting engine did not include platform awareness (whether running on APK, PWA, or standalone browser).
+- **Architectural Solution:**
+  1. Created `src/services/environment.ts` with `APP_ENV = detectEnvironment()`:
+     - Detects `isAndroidApk`, `isPwa`, `isStandalone`, `isInsideGoogleStudio`, and `storageDescription`.
+     - Provides `openExternalUrl()` that safely uses system browsers/intents.
+  2. Updated `src/services/auth.ts` and `ApiKeyVault.tsx`:
+     - Recognizes Standalone & Native APK modes, clearly communicating that all features (Director, Suno Music, Subtitles, Storyboard, Keyframes) work 100% via Built-in or Custom API keys with persistent storage.
+  3. Integrated runtime diagnostics into `logCapture.ts` and `CaptureLogsModal.tsx`, logging platform mode (`Android APK (Native)`, `Standalone Web`, or `Google AI Studio Sandbox`) in the Diagnostic Report for AI.
+  4. Updated MediaSession metadata across all audio/video playback elements in `App.tsx` from `'AI Studio'` to `'MV Director'`.
+  5. Added real-time environment status badges in the Settings dropdown and Web Test Browser tab.
+
+### 113. Understanding and Mitigating `net::ERR_BLOCKED_BY_RESPONSE` on Android WebViews (`BrowserTab.tsx`)
+- **Problem & Root Cause:**
+  - When loading `https://m.youtube.com/` in an in-app WebView tab, Android displays:
+    `Web page not available ... net::ERR_BLOCKED_BY_RESPONSE`.
+  - *Root Cause:* The app is packaged as an Android APK (Capacitor/WebView) outside Google AI Studio, but the in-app browser tab still embeds third-party web content via an HTML `<iframe>` element.
+  - The Chromium engine inside Android WebViews strictly obeys HTTP security response headers sent by remote servers.
+  - When a request reaches `m.youtube.com` or `youtube.com`, YouTube's servers respond with `X-Frame-Options: SAMEORIGIN` and CSP `frame-ancestors 'self'`. This header explicitly commands Chromium to BLOCK the page if loaded inside any third-party `<iframe>`.
+  - YouTube deliberately permits iframe embedding *only* on its dedicated `/embed/VIDEO_ID` (or `youtube-nocookie.com/embed/VIDEO_ID`) endpoints, and blocks all top-level portal pages (`m.youtube.com`, search, home).
+- **Architectural Solution:**
+  1. Updated `BrowserTab.tsx` with an active `checkBlockedSite()` detector for YouTube portals, Google Search, etc.
+  2. Replaced the raw iframe error with an in-app diagnostic card explaining `X-Frame-Options: SAMEORIGIN` and offering 1-tap alternatives:
+     - "Open in System Browser" (`window.open(url, '_blank')`), which executes top-level navigation outside `<iframe>` constraints where `X-Frame-Options` is not evaluated.
+     - "Test Video Embed Instead" (`youtube-nocookie.com/embed/ID`), which is permitted by YouTube's servers inside `<iframe>`.
+  3. Changed the "YouTube Mobile" preset in the presets bar to directly trigger Pop-out system browser navigation.
+
 ### 112. Elimination of Leaked React DOM Event Handlers (`onBuffer`, `onBufferEnd`) on Player (`SubtitleTimelineEditor.tsx`, `App.tsx`)
 - **Problem & Root Cause:**
   - React logged console warnings:

@@ -39,6 +39,7 @@ import ReactPlayer from 'react-player';
 import { compressImage } from '@/utils/imageUtils';
 import { motion, useDragControls } from 'motion/react';
 import { listenAuthState, isNativeEnvironment } from '@/services/auth';
+import { APP_ENV } from '@/services/environment';
 import type { User } from 'firebase/auth';
 // FIX: Import missing 'Key' icon from lucide-react.
 import { 
@@ -1350,7 +1351,7 @@ export const App: React.FC = () => {
                             )}
                             <span className="hidden lg:inline text-white/90 font-medium max-w-[90px] truncate">{googleUser.displayName || 'Google'}</span>
                         </>
-                    ) : isNativeEnvironment() ? (
+                    ) : APP_ENV.isStandalone ? (
                         <>
                             <Key className="w-3.5 h-3.5 text-indigo-400" />
                             <span className="hidden sm:inline text-white/70 font-semibold">API Keys</span>
@@ -1400,6 +1401,10 @@ export const App: React.FC = () => {
                             <button onClick={() => { setShowSecondBrain(true); setIsSettingsMenuOpen(false); }} className="w-full text-left flex items-center gap-3 px-3 py-2 text-xs text-white/80 hover:bg-white/5"><Brain className="w-4 h-4 text-purple-400" /> Second Brain</button>
                             <button onClick={() => { setShowCrashLogs(true); setIsSettingsMenuOpen(false); }} className="w-full text-left flex items-center gap-3 px-3 py-2 text-xs text-red-400/90 hover:bg-white/5"><Bug className="w-4 h-4 text-red-400" /> Crash Logs</button>
                              <button onClick={() => { setShowChangelog(true); setIsSettingsMenuOpen(false); }} className="w-full text-left flex items-center gap-3 px-3 py-2 text-xs text-white/80 hover:bg-white/5"><FileText className="w-4 h-4 text-indigo-400" /> Changelog</button>
+                             <div className="px-3 py-1.5 text-[10px] text-white/40 border-t border-white/5 flex items-center justify-between">
+                                 <span>Runtime:</span>
+                                 <span className="font-semibold text-emerald-400">{APP_ENV.environmentLabel}</span>
+                             </div>
                         </div>
                     )}
                 </div>
@@ -2532,7 +2537,7 @@ export const App: React.FC = () => {
                                         navigator.mediaSession.metadata = new MediaMetadata({
                                             title: projectData.localPlaylist ? projectData.localPlaylist[projectData.currentTrackIndex || 0].name : 'MV Director Soundtrack',
                                             artist: 'Local File',
-                                            album: 'AI Studio'
+                                            album: 'MV Director'
                                         });
                                         if (projectData.localPlaylist && projectData.localPlaylist.length > 1) {
                                             navigator.mediaSession.setActionHandler('nexttrack', () => {
@@ -2569,7 +2574,7 @@ export const App: React.FC = () => {
                                         navigator.mediaSession.metadata = new MediaMetadata({
                                             title: projectData.localPlaylist ? projectData.localPlaylist[projectData.currentTrackIndex || 0].name : 'MV Director Soundtrack',
                                             artist: 'Local File',
-                                            album: 'AI Studio'
+                                            album: 'MV Director'
                                         });
                                         if (projectData.localPlaylist && projectData.localPlaylist.length > 1) {
                                             navigator.mediaSession.setActionHandler('nexttrack', () => {
@@ -2607,7 +2612,7 @@ export const App: React.FC = () => {
                                     navigator.mediaSession.metadata = new MediaMetadata({
                                         title: 'MV Director Soundtrack',
                                         artist: 'YouTube',
-                                        album: 'AI Studio'
+                                        album: 'MV Director'
                                     });
                                 }
                             }}

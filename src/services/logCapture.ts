@@ -4,6 +4,8 @@
  * Captures WebView/Capacitor environment specs for easy copying to AI chat.
  */
 
+import { APP_ENV } from './environment';
+
 export type LogLevel = 'log' | 'info' | 'warn' | 'error' | 'network' | 'crash';
 
 export interface CapturedLogEntry {
@@ -17,6 +19,15 @@ export interface CapturedLogEntry {
 }
 
 export interface EnvironmentDiagnostics {
+  runtime: {
+    environmentLabel: string;
+    environmentName: string;
+    isStandalone: boolean;
+    isInsideGoogleStudio: boolean;
+    isInsideIframe: boolean;
+    isAndroidApk: boolean;
+    storageDescription: string;
+  };
   userAgent: string;
   href: string;
   origin: string;
@@ -178,6 +189,15 @@ export async function getEnvironmentDiagnostics(): Promise<EnvironmentDiagnostic
   }
 
   return {
+    runtime: {
+      environmentLabel: APP_ENV.environmentLabel,
+      environmentName: APP_ENV.environmentName,
+      isStandalone: APP_ENV.isStandalone,
+      isInsideGoogleStudio: APP_ENV.isInsideGoogleStudio,
+      isInsideIframe: APP_ENV.isInsideIframe,
+      isAndroidApk: APP_ENV.isAndroidApk,
+      storageDescription: APP_ENV.storageDescription,
+    },
     userAgent: navigator.userAgent,
     href: window.location.href,
     origin: window.location.origin,
@@ -215,13 +235,15 @@ export async function formatFullDiagnosticReportForAI(filterLevel?: LogLevel | '
     : memoryLogs;
 
   const lines: string[] = [
-    `# 📱 MV Director - Android & WebView Diagnostic Report`,
+    `# 📱 MV Director - Environment & Diagnostic Report`,
     `Generated at: ${new Date().toISOString()}`,
     ``,
-    `## ⚙️ Environment & Device Info`,
+    `## ⚙️ Environment & Platform Awareness`,
+    `- **Platform Mode:** \`${diag.runtime.environmentLabel}\` (${diag.runtime.isStandalone ? '✅ Standalone (Outside Google Studio Sandbox)' : 'Inside Studio Sandbox'})`,
+    `- **Storage Mode:** ${diag.runtime.storageDescription}`,
+    `- **Native Android APK:** ${diag.isCapacitor || diag.runtime.isAndroidApk ? `YES (Capacitor/Android WebView)` : 'NO (Web Browser)'}`,
     `- **User Agent:** \`${diag.userAgent}\``,
     `- **URL / Origin:** \`${diag.href}\` (\`${diag.origin}\`)`,
-    `- **Capacitor / Native APK:** ${diag.isCapacitor ? `YES (Platform: ${diag.capacitorPlatform})` : 'NO (Standard Web Browser)'}`,
     `- **Screen / Viewport:** ${diag.screen.innerWidth}x${diag.screen.innerHeight} (Screen: ${diag.screen.width}x${diag.screen.height}, DPR: ${diag.screen.devicePixelRatio})`,
     `- **Touch Points:** ${diag.hardware.maxTouchPoints} | **Online:** ${diag.hardware.onLine}`,
     `- **Hardware:** CPU Cores: ${diag.hardware.concurrency ?? 'N/A'}, Device RAM: ~${diag.hardware.deviceMemory ? `${diag.hardware.deviceMemory}GB` : 'N/A'}`,
