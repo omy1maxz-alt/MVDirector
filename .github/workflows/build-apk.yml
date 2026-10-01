@@ -33,9 +33,9 @@ jobs:
         run: |
           npm install --legacy-peer-deps
 
-      - name: Install Capacitor CLI
+      - name: Install Capacitor
         run: |
-          npm install -g @capacitor/cli
+          npm install @capacitor/core @capacitor/cli @capacitor/android
 
       - name: Build Web Application
         run: |
