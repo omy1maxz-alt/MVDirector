@@ -1,25 +1,63 @@
-- name: Set up Android SDK
-  uses: android-actions/setup-android@v3
+name: Android Build
 
-- name: Install Android SDK packages
-  shell: bash
-  run: |
-    set -euo pipefail
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
 
-    SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+permissions:
+  contents: read
 
-    if [ ! -x "$SDKMANAGER" ]; then
-      SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" \
-        -type f -name sdkmanager -print -quit)"
-    fi
+jobs:
+  build:
+    name: Build Android App
+    runs-on: ubuntu-latest
 
-    if [ -z "$SDKMANAGER" ] || [ ! -x "$SDKMANAGER" ]; then
-      echo "sdkmanager not found"
-      exit 1
-    fi
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    yes | "$SDKMANAGER" --licenses >/dev/null || true
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
 
-    "$SDKMANAGER" --install \
-      "platforms;android-34" \
-      "build-tools;34.0.0"
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" \
+              -type f -name sdkmanager -print -quit)"
+          fi
+
+          if [ -z "$SDKMANAGER" ] || [ ! -x "$SDKMANAGER" ]; then
+            echo "sdkmanager not found"
+            exit 1
+          fi
+
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+
+          "$SDKMANAGER" --install \
+            "platforms;android-34" \
+            "build-tools;34.0.0"
+
+      - name: Make Gradle executable
+        run: chmod +x ./gradlew
+
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug
+
+      - name: Run Unit Tests
+        run: ./gradlew test
