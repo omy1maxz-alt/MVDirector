@@ -16,26 +16,12 @@ permissions:
 
 jobs:
   build-apk:
-    name: Build Capacitor Android APK
+    name: Build Android APK
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-
-      - name: Setup Node.js LTS
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'npm'
-
-      - name: Install Node Dependencies
-        run: |
-          npm install --legacy-peer-deps
-
-      - name: Build Web Application
-        run: |
-          npm run build
 
       - name: Setup Java JDK 17
         uses: actions/setup-java@v4
@@ -45,69 +31,22 @@ jobs:
 
       - name: Setup Android SDK
         run: |
-          echo "y" | sudo apt-get update
-          echo "y" | sudo apt-get install -y android-sdk android-sdk-platform-tools android-sdk-build-tools
-          
-      - name: Install Android Components via SDK Manager
+          sudo apt-get update
+          sudo apt-get install -y android-sdk android-sdk-platform-tools android-sdk-build-tools
+
+      - name: Install Android Components
         run: |
           export ANDROID_SDK_ROOT=/usr/lib/android-sdk
-          export PATH=$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin
-          
-          echo "Installing SDK components..."
           yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT "platforms;android-34" "build-tools;34.0.0" "platform-tools" 2>&1 || true
-          
-          echo "Accepting licenses..."
           yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses 2>&1 || true
 
-      - name: Check for Android Directory
+      - name: Check for Android Project
         run: |
           if [ ! -d "android" ]; then
-            echo "❌ android/ directory not found!"
-            echo "You need to initialize Capacitor Android locally and commit it:"
-            echo "  1. Run: npx cap add android"
-            echo "  2. Run: npx cap sync android"
-            echo "  3. Commit the android/ folder to your repository"
+            echo "Android directory not found. You need to add an Android project to your repo."
+            echo "Option 1: Commit an android/ folder with a complete Android project"
+            echo "Option 2: Use Capacitor (requires package.json setup)"
             exit 1
-          else
-            echo "✅ android/ directory found"
-            ls -la android/
-          fi
-
-      - name: Sync Capacitor Android
-        run: |
-          npm exec -- cap sync android || true
-
-      - name: Configure Android Permissions & Features
-        shell: bash
-        run: |
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
-          if [ -f "$MANIFEST" ]; then
-            python3 - "$MANIFEST" <<'PY'
-          import sys
-          from pathlib import Path
-
-          manifest_path = Path(sys.argv[1])
-          content = manifest_path.read_text()
-
-          permissions = [
-              "android.permission.INTERNET",
-              "android.permission.ACCESS_NETWORK_STATE",
-              "android.permission.RECORD_AUDIO",
-              "android.permission.MODIFY_AUDIO_SETTINGS",
-              "android.permission.WAKE_LOCK",
-          ]
-
-          additions = []
-          for permission in permissions:
-              declaration = f'    <uses-permission android:name="{permission}" />'
-              if declaration not in content:
-                  additions.append(declaration)
-
-          if additions:
-              marker = "</manifest>"
-              content = content.replace(marker, "\n".join(additions) + "\n" + marker, 1)
-              manifest_path.write_text(content)
-          PY
           fi
 
       - name: Build Android Debug APK
