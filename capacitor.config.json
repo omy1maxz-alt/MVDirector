@@ -1,6 +1,6 @@
 {
   "appId": "com.mvdirector.studio",
-  "appName": "MV Director",
+  "appName": "mv-director",
   "webDir": "dist",
   "server": {
     "androidScheme": "https"

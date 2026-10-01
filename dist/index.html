@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en" style="height: 100dvh;">
+<head>
+    <meta charset="UTF-8">
+    <script>
+        // Unblock window.fetch setter immediately to prevent 'Cannot set property fetch of #<Window> which has only a getter'
+        (function() {
+            try {
+                var _nativeFetch = (typeof window !== 'undefined' && window.fetch) ? window.fetch.bind(window) : (typeof globalThis !== 'undefined' && globalThis.fetch ? globalThis.fetch.bind(globalThis) : null);
+                var _currentFetch = _nativeFetch;
+                var descriptor = {
+                    get: function() {
+                        return _currentFetch || (window.fetch !== _currentFetch ? window.fetch : _nativeFetch);
+                    },
+                    set: function(fn) {
+                        _currentFetch = fn;
+                    },
+                    configurable: true,
+                    enumerable: true
+                };
+                try {
+                    Object.defineProperty(window, 'fetch', descriptor);
+                } catch (e1) {}
+                try {
+                    if (typeof Window !== 'undefined' && Window.prototype) {
+                        Object.defineProperty(Window.prototype, 'fetch', descriptor);
+                    }
+                } catch (e2) {}
+            } catch (e) {}
+        })();
+    </script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
+    <title>MV Director AI - Mobile Cinematic Studio</title>
+    <meta name="description" content="Professional-grade cinematic music video storyboarding and AI visual director engineered exclusively for mobile touch workflows, handheld production ergonomics, and high-performance mobile creation.">
+    
+    <!-- Mobile Web App Meta -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="MV Director">
+    <meta name="theme-color" content="#000000">
+
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <link rel="icon" type="image/svg+xml" href="/icon.svg">
+
+    <!-- OpenGraph & Social Cards -->
+    <meta property="og:title" content="MV Director AI - Mobile Cinematic Studio">
+    <meta property="og:description" content="Professional-grade cinematic music video storyboarding and AI visual director engineered exclusively for mobile touch workflows, handheld production ergonomics, and high-performance mobile creation.">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="MV Director AI - Mobile Cinematic Studio">
+    <meta name="twitter:description" content="Professional-grade cinematic music video storyboarding and AI visual director engineered exclusively for mobile touch workflows, handheld production ergonomics, and high-performance mobile creation.">
+
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎬</text></svg>">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Bebas+Neue&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        html, body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #000;
+            color: #fff;
+            margin: 0;
+            padding: 0;
+            height: 100dvh;
+            width: 100vw;
+            overflow: hidden;
+        }
+        .font-bebas { font-family: 'Bebas Neue', cursive; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        #root { height: 100dvh; width: 100vw; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes pulseGlow { 0%, 100% { opacity: 0.35; transform: scale(1); } 50% { opacity: 0.7; transform: scale(1.05); } }
+        .boot-log-line { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #666; margin-top: 4px; border-left: 2px solid #333; padding-left: 8px; line-height: 1.4; word-break: break-all; }
+        .boot-success { color: #4ade80 !important; border-left-color: #22c55e !important; }
+        .boot-error { color: #ef4444 !important; border-left-color: #dc2626 !important; }
+        
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #262626; border-radius: 2px; }
+    </style>
+    
+    <script>
+        window.bootLog = function(msg, type = 'info') {
+            const logArea = document.getElementById('boot-status-log');
+            if (logArea) {
+                const line = document.createElement('div');
+                line.className = 'boot-log-line';
+                if (type === 'error' || type === true) line.className += ' boot-error';
+                if (type === 'success') line.className += ' boot-success';
+                line.textContent = `> ${msg}`;
+                logArea.appendChild(line);
+                logArea.scrollTop = logArea.scrollHeight;
+            }
+        };
+    </script>
+
+  <script type="module" crossorigin src="/assets/index-Bs8wFp6R.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-C6u55e2P.css">
+<link rel="manifest" href="/manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="/registerSW.js"></script></head>
+<body>
+    <div id="root">
+        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100dvh; width: 100vw; background: radial-gradient(circle at center, #111116 0%, #050507 100%); color: #fff; padding: 24px; text-align: center; user-select: none;">
+            <!-- App Icon Glow -->
+            <div style="position: relative; margin-bottom: 24px;">
+                <div style="position: absolute; inset: -12px; background: radial-gradient(circle, rgba(79, 70, 229, 0.4) 0%, transparent 70%); border-radius: 50%; filter: blur(10px); animation: pulseGlow 2.5s infinite ease-in-out;"></div>
+                <div style="position: relative; width: 64px; height: 64px; background: #0d0d12; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 20px; display: flex; items-center; justify-content: center; font-size: 28px; line-height: 64px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+                    🎬
+                </div>
+            </div>
+
+            <!-- Title & Badge -->
+            <div style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; background: rgba(79, 70, 229, 0.15); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 9999px; margin-bottom: 12px;">
+                <span style="width: 6px; height: 6px; border-radius: 50%; background: #6366f1;"></span>
+                <span style="font-size: 9px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #a5b4fc;">Mobile-First Studio</span>
+            </div>
+
+            <h1 style="font-family: 'Bebas Neue', cursive; font-size: 32px; letter-spacing: 0.08em; margin: 0 0 6px 0; color: #ffffff; text-shadow: 0 2px 10px rgba(0,0,0,0.5);">
+                MV Director AI
+            </h1>
+            <p style="font-size: 11px; color: rgba(255, 255, 255, 0.5); max-width: 280px; line-height: 1.45; margin: 0 0 28px 0;">
+                Professional cinematic storyboarding engineered exclusively for mobile touch workflows.
+            </p>
+
+            <!-- Loading Spinner -->
+            <div style="width: 32px; height: 32px; border: 2.5px solid rgba(255, 255, 255, 0.08); border-top-color: #6366f1; border-radius: 50%; animation: spin 0.75s linear infinite; margin-bottom: 20px;"></div>
+
+            <!-- Status Logs Container -->
+            <div style="width: 100%; max-width: 320px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 12px; max-height: 110px; overflow-y: auto;" id="boot-status-log">
+                <div class="boot-log-line">> Initializing touch-optimized engine...</div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
