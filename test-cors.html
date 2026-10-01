@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html>
+<body>
+<script>
+fetch('https://generativelanguage.googleapis.com/upload/v1beta/files?key=DUMMY', {
+  method: 'OPTIONS',
+  headers: {
+    'X-Goog-Upload-Protocol': 'resumable',
+    'X-Goog-Upload-Command': 'start'
+  }
+}).then(res => console.log(res.headers)).catch(err => console.error(err));
+</script>
+</body>
+</html>

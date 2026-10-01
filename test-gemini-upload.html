@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<body>
+<input type="file" id="file" />
+<button id="upload">Upload</button>
+<pre id="log"></pre>
+<script type="module">
+  function log(msg) {
+    document.getElementById('log').textContent += msg + '\n';
+  }
+  
+  document.getElementById('upload').onclick = async () => {
+    const file = document.getElementById('file').files[0];
+    if(!file) return;
+    
+    // We will use the backend proxy or a test API key to test this.
+    // Wait, let's just make a dummy request with a wrong API key to see if it gives 400 or 401.
+    // If it gives 400, it means it reaches the API and fails validation.
+    
+    // Actually, I can just use my node-fetch script to test what happens if I send a different Content-Length.
+  };
+</script>
+</body>
+</html>

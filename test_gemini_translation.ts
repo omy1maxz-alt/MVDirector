@@ -1,0 +1,3 @@
+export const syncSubtitleTranslations = async (currentText: string, apiKey?: string): Promise<string> => {
+    // ...
+}

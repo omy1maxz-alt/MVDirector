@@ -1,0 +1,84 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Bebas+Neue&display=swap');
+@import "tailwindcss";
+
+:root {
+    --sat: env(safe-area-inset-top, 0px);
+    --sab: env(safe-area-inset-bottom, 0px);
+    --sal: env(safe-area-inset-left, 0px);
+    --sar: env(safe-area-inset-right, 0px);
+}
+
+html, body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: #000;
+    color: #fff;
+    margin: 0;
+    padding: 0;
+    height: 100dvh;
+    width: 100vw;
+    overflow: hidden;
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: touch;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+/* Allow text selection specifically inside text inputs, textareas, and code editors */
+input, textarea, [contenteditable="true"], pre, code {
+    user-select: text;
+    -webkit-user-select: text;
+}
+
+#root {
+    height: 100dvh;
+    height: var(--vvh, 100dvh);
+    width: 100vw;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Virtual Keyboard Adaptation for Android APK */
+body.keyboard-open .md\:hidden.fixed.bottom-0 {
+    display: none !important;
+}
+
+body.keyboard-open main {
+    padding-bottom: 0.5rem !important;
+}
+
+.font-bebas { font-family: 'Bebas Neue', cursive; }
+
+/* Safe Area Inset Utility Classes for Android / Poco F5 */
+.pt-safe {
+    padding-top: max(env(safe-area-inset-top, 0px), 0px);
+}
+
+.pb-safe {
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 0px);
+}
+
+.pl-safe {
+    padding-left: max(env(safe-area-inset-left, 0px), 0px);
+}
+
+.pr-safe {
+    padding-right: max(env(safe-area-inset-right, 0px), 0px);
+}
+
+.safe-top-bar {
+    padding-top: max(env(safe-area-inset-top, 0px), 0px);
+    height: calc(3.5rem + max(env(safe-area-inset-top, 0px), 0px));
+}
+
+.safe-bottom-nav {
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 0.5rem);
+    padding-left: max(env(safe-area-inset-left, 0px), 0.5rem);
+    padding-right: max(env(safe-area-inset-right, 0px), 0.5rem);
+}
+
+.custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #262626; border-radius: 2px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #3f3f46; }

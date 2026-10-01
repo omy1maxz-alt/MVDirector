@@ -1,0 +1,59 @@
+{
+  "entities": {
+    "ProjectData": {
+      "title": "Project Data",
+      "description": "A single MV Director project owned by a user.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The UID of the user who owns the project."
+        },
+        "projectType": { "type": "string" },
+        "directorPersona": { "type": "string" },
+        "generationMode": { "type": "string" },
+        "lyrics": { "type": "string" },
+        "technicalInstructions": { "type": "string" },
+        "soundtrackUrl": { "type": "string" },
+        "characters": { "type": "array" },
+        "referenceImages": { "type": "array" }
+      },
+      "required": ["userId"]
+    },
+    "DirectorPlan": {
+      "title": "Director Plan",
+      "description": "The director plan associated with a project.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The UID of the user who owns the plan."
+        },
+        "scenes": { "type": "array" },
+        "timestamp": { "type": "number" },
+        "targetSceneCount": { "type": "number" },
+        "totalGenerationTokens": { "type": "number" }
+      },
+      "required": ["userId"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/projects/{projectId}": {
+      "schema": { "$ref": "#/entities/ProjectData" },
+      "description": "User's MV Director projects."
+    },
+    "/users/{userId}/plans/{planId}": {
+      "schema": { "$ref": "#/entities/DirectorPlan" },
+      "description": "User's MV Director plans."
+    },
+    "/users/{userId}/studio_chat/{chatDoc}": {
+      "description": "User's Studio Chat conversation indexes."
+    },
+    "/users/{userId}/studio_chat_messages/{conversationId}": {
+      "description": "User's Studio Chat conversation messages."
+    },
+    "/users/{userId}/brain/{brainDoc}": {
+      "description": "User's brain notes."
+    }
+  }
+}

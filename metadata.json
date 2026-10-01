@@ -1,0 +1,8 @@
+{
+  "name": "test 2",
+  "description": "A professional tool for music video creators to storyboard and generate cinematic visuals based on lyrics and character descriptions.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

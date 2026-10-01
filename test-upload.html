@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html>
+<body>
+<input type="file" id="file" />
+<button id="upload">Upload</button>
+<script type="module">
+  document.getElementById('upload').onclick = async () => {
+    const file = document.getElementById('file').files[0];
+    const apiKey = "DUMMY"; // We can't use DUMMY, we need a real one if we want to test. But maybe we can see if it fails at the start.
+  };
+</script>
+</body>
+</html>

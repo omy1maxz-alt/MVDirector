@@ -1,0 +1,19 @@
+    if (projectData.generationMode === 'narrative') {
+        prompt += `**Enhanced Creative Brief — Story Mode (Lyrics-Only) Specifics:**
+Analyze the complete song lyrics and extract the core storytelling structure that will guide cinematic music video scene generation.
+Goal: Transform the lyrical narrative into a coherent sequence of emotionally expressive visual scenes that follow the song's musical and emotional progression.
+
+**Analysis Process:**
+1. **Core Theme and Message:** Identify the central theme of the song and the deeper message or emotional truth conveyed by the lyrics.
+2. **Emotional Progression:** Map how the emotional tone evolves throughout the song (e.g., curiosity -> tension -> longing -> confession -> resolution). Ensure the visual storytelling reflects this emotional journey.
+3. **Narrative Structure by Musical Sections:** Divide the lyrics according to the song structure (Intro, Verse, Pre-Chorus, Chorus, Bridge, Outro). Each section represents a narrative beat in the story.
+4. **Narrative Beat Analysis:** For every musical section determine:
+   - **Emotional Tone:** The dominant feeling conveyed in the lyrics during that moment.
+   - **Key Imagery or Symbolism:** Objects, gestures, or visual metaphors suggested by the lyrics.
+   - **Character Perspective:** Who is experiencing the moment and what interaction occurs.
+   - **Environment and Atmosphere:** Lighting, weather, setting, and visual mood that support the emotion.
+5. **Visual Scene Translation:** Convert each narrative beat into a concise cinematic scene concept suitable for a music video. Each scene description should include setting, character actions, camera or framing ideas, and emotional focus. Scenes must visually communicate the emotion and meaning of the lyrics rather than depicting them word-for-word.
+6. **Scene Continuity and Flow:** Determine whether each scene should continue the previous setting as a sequential moment (isContinuation: true) or transition to a new location or visual metaphor (isContinuation: false). Maintain visual continuity where appropriate so the story flows naturally with the music.
+7. **Emphasize Key Moments:** Highlight pivotal emotional moments such as the Chorus, Climax, Confession, or Turning point. These scenes should feature stronger visual impact through more dynamic camera movement, symbolic imagery, or dramatic lighting/setting changes.
+8. **Cinematic Storytelling Priority:** Prioritize expressive, cinematic visuals that deepen the emotional meaning of the song rather than literal interpretations of each lyric line.
+`;

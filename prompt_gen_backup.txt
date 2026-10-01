@@ -1,0 +1,1301 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Wand2, Sparkles, Settings, Trash2, Copy, Check, Image as ImageIcon, Upload, Loader2, Palette, ChevronDown, Download, List } from 'lucide-react';
+import { analyzeImageToJson, enhancePrompt, generateSingleImage, generateComboBatchScenes, generateMultiSwapImage } from '@/services/gemini';
+import { compressImage } from '@/utils/imageUtils';
+import { ALL_COMBINATIONS } from '@/data/comboData';
+import { AspectRatio } from '@/types';
+
+const LAB_STATE_KEY = 'mv_director_lab_state';
+
+interface LabState {
+  comboBatchSize?: number;
+  comboBatchScenes?: any[];
+  comboUsedCombinos?: string[];
+  basePrompt: string;
+  styleModifier: string;
+  qualityModifier: string;
+  generatedPrompts: string[];
+  analyzedImage?: string | null;
+  analysisResult?: string;
+  subjectReplacement?: string;
+  singleImagePrompt?: string;
+  singleImageAspect?: AspectRatio;
+  singleImageRefId?: string;
+  singleImageFrameRef?: string | null;
+  generatedSingleImage?: string | null;
+  idTransferCharRefId?: string;
+  idTransferFrameRef?: string | null;
+  idTransferSubject?: string;
+  idTransferAction?: string;
+  idTransferSetting?: string;
+  idTransferLighting?: string;
+  idTransferStyle?: string;
+  idTransferComposition?: string;
+  idTransferAspect?: AspectRatio;
+  generatedIdTransferImage?: string | null;
+  multiSwapFrameRef?: string | null;
+  multiSwapMappings?: { charId: string, description: string }[];
+  generatedMultiSwapImage?: string | null;
+}
+
+export const PromptGenerator = ({ projectData, apiKeys, apiKeySource, onLog }: any) => {
+  const [labState, setLabState] = useState<LabState>(() => {
+    try {
+      const savedState = localStorage.getItem(LAB_STATE_KEY);
+      return savedState ? JSON.parse(savedState) : {
+        basePrompt: 'A lone astronaut on a desolate red planet',
+        styleModifier: 'in the style of a vintage sci-fi comic book',
+        qualityModifier: '4k, detailed, cinematic lighting',
+        generatedPrompts: [],
+      };
+    } catch (error) {
+        console.error("Failed to load lab state:", error);
+        return {
+            basePrompt: 'A lone astronaut on a desolate red planet',
+            styleModifier: 'in the style of a vintage sci-fi comic book',
+            qualityModifier: '4k, detailed, cinematic lighting',
+            generatedPrompts: [],
+        };
+    }
+  });
+  const [isLoading, setIsLoading] = useState(false);
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState<'generator' | 'analyzer' | 'single_image' | 'identity_transfer' | 'combo_batch' | 'swap_char'>('generator');
+  
+  // Analyzer state
+  const [analyzedImage, setAnalyzedImage] = useState<string | null>(labState.analyzedImage || null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const abortControllerAnalyzerRef = useRef<AbortController | null>(null);
+  const [analysisResult, setAnalysisResult] = useState<string>(labState.analysisResult || '');
+  const [copiedJson, setCopiedJson] = useState(false);
+  const [copiedStyle, setCopiedStyle] = useState(false);
+  const [subjectReplacement, setSubjectReplacement] = useState(labState.subjectReplacement || '');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Single Image State
+  const [singleImagePrompt, setSingleImagePrompt] = useState(labState.singleImagePrompt ?? labState.basePrompt ?? '');
+  const [singleImageAspect, setSingleImageAspect] = useState<AspectRatio>(labState.singleImageAspect ?? '16:9');
+  const [singleImageRefId, setSingleImageRefId] = useState<string>(labState.singleImageRefId ?? 'none');
+  const [singleImageFrameRef, setSingleImageFrameRef] = useState<string | null>(labState.singleImageFrameRef ?? null);
+  const [generatedSingleImage, setGeneratedSingleImage] = useState<string | null>(labState.generatedSingleImage ?? null);
+  const [isGeneratingSingle, setIsGeneratingSingle] = useState(false);
+  const frameInputRef = useRef<HTMLInputElement>(null);
+
+  // Identity Transfer State
+  const [idTransferCharRefId, setIdTransferCharRefId] = useState<string>(labState.idTransferCharRefId ?? 'none');
+  const [idTransferFrameRef, setIdTransferFrameRef] = useState<string | null>(labState.idTransferFrameRef ?? null);
+  const [idTransferSubject, setIdTransferSubject] = useState(labState.idTransferSubject ?? '');
+  const [idTransferAction, setIdTransferAction] = useState(labState.idTransferAction ?? '');
+  const [idTransferSetting, setIdTransferSetting] = useState(labState.idTransferSetting ?? '');
+  const [idTransferLighting, setIdTransferLighting] = useState(labState.idTransferLighting ?? '');
+  const [idTransferStyle, setIdTransferStyle] = useState(labState.idTransferStyle ?? '');
+  const [idTransferComposition, setIdTransferComposition] = useState(labState.idTransferComposition ?? '');
+  const [idTransferAspect, setIdTransferAspect] = useState<AspectRatio>(labState.idTransferAspect ?? '16:9');
+  const [generatedIdTransferImage, setGeneratedIdTransferImage] = useState<string | null>(labState.generatedIdTransferImage ?? null);
+  const [isGeneratingIdTransfer, setIsGeneratingIdTransfer] = useState(false);
+  const [isAnalyzingFrame, setIsAnalyzingFrame] = useState(false);
+  const idTransferFrameInputRef = useRef<HTMLInputElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Multi-Swap State
+  const [multiSwapFrameRef, setMultiSwapFrameRef] = useState<string | null>(labState.multiSwapFrameRef ?? null);
+  const [multiSwapMappings, setMultiSwapMappings] = useState<{ charId: string, description: string }[]>(labState.multiSwapMappings ?? [{ charId: 'none', description: 'Person on the left' }]);
+  const [generatedMultiSwapImage, setGeneratedMultiSwapImage] = useState<string | null>(labState.generatedMultiSwapImage ?? null);
+  const [isGeneratingMultiSwap, setIsGeneratingMultiSwap] = useState(false);
+  const multiSwapFrameInputRef = useRef<HTMLInputElement>(null);
+
+  const handleMultiSwapFrameUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      onLog("Compressing frame reference...", 'info');
+      try {
+          const compressed = await compressImage(file, 1024);
+          setMultiSwapFrameRef(compressed);
+          onLog("Frame reference uploaded.", 'success');
+      } catch (err: any) {
+          onLog("Failed to process image.", 'error');
+      }
+      if (e.target) e.target.value = '';
+  };
+
+  // Combo Batch Generator State
+  const [comboBatchSize, setComboBatchSize] = useState<number>(labState.comboBatchSize ?? 5);
+  const [comboBatchScenes, setComboBatchScenes] = useState<any[]>(labState.comboBatchScenes ?? []);
+  const [comboUsedCombinos, setComboUsedCombinos] = useState<Set<string>>(new Set(labState.comboUsedCombinos ?? []));
+  const [isGeneratingComboBatch, setIsGeneratingComboBatch] = useState(false);
+
+
+  useEffect(() => {
+    try {
+        localStorage.setItem(LAB_STATE_KEY, JSON.stringify({
+            ...labState,
+            analysisResult,
+            subjectReplacement,
+            singleImagePrompt,
+            singleImageAspect,
+            comboBatchSize,
+            comboBatchScenes,
+            comboUsedCombinos: Array.from(comboUsedCombinos),
+            singleImageRefId,
+            idTransferCharRefId,
+            idTransferSubject,
+            multiSwapFrameRef,
+            multiSwapMappings,
+            idTransferAction,
+            idTransferSetting,
+            idTransferLighting,
+            idTransferStyle,
+            idTransferComposition,
+            idTransferAspect
+        }));
+    } catch (error) {
+        console.error("Failed to save lab state:", error);
+    }
+  }, [labState, analysisResult, subjectReplacement, singleImagePrompt, singleImageAspect, singleImageRefId, idTransferCharRefId, idTransferSubject, idTransferAction, idTransferSetting, idTransferLighting, idTransferStyle, idTransferComposition, idTransferAspect]);
+
+    const handleIdTransferFrameUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        try {
+            setIsAnalyzingFrame(true);
+            onLog("Analyzing frame reference to auto-fill prompt...", 'info');
+            const compressed = await compressImage(file, 1024);
+            setIdTransferFrameRef(compressed);
+            
+            const ac = new AbortController();
+            abortControllerRef.current = ac;
+
+            const key = apiKeySource === 'custom' ? apiKeys.google : undefined;
+            const subjectNameToExtract = idTransferCharRefId !== 'none' 
+                ? "The character reference" 
+                : (idTransferSubject || "The main subject");
+                
+            const parsed = await analyzeImageToJson(compressed, key, subjectNameToExtract);
+            
+            if (ac.signal.aborted) return;
+
+            if (parsed.error) {
+                throw new Error(parsed.error);
+            }
+            
+            setIdTransferAction(parsed.subject || '');
+            setIdTransferSetting(parsed.environment || '');
+            setIdTransferLighting([parsed.lighting, parsed.mood].filter(Boolean).join(', '));
+            setIdTransferStyle(parsed.masterArtStyle || parsed.style || '');
+            setIdTransferComposition([parsed.composition, parsed.frame_reference].filter(Boolean).join(', '));
+            
+            if (idTransferCharRefId === 'none' && !idTransferSubject) {
+                setIdTransferSubject('The main subject');
+            }
+            
+            onLog("Frame analysis complete. Prompt structure auto-filled.", 'success');
+        } catch (error: any) {
+            if (abortControllerRef.current?.signal.aborted) return;
+            console.error("Failed to analyze frame image:", error);
+            onLog(`Failed to analyze frame: ${error.message}`, 'error');
+        } finally {
+            if (abortControllerRef.current?.signal?.aborted) return;
+            setIsAnalyzingFrame(false);
+            abortControllerRef.current = null;
+            if (idTransferFrameInputRef.current) idTransferFrameInputRef.current.value = '';
+        }
+    };
+
+    const handleStopIdTransferAnalysis = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+            abortControllerRef.current = null;
+        }
+        setIsAnalyzingFrame(false);
+        onLog("Frame analysis stopped by user.", "warning");
+    };
+
+    const handleReanalyzeIdTransferFrame = async (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!idTransferFrameRef) return;
+        
+        try {
+            setIsAnalyzingFrame(true);
+            onLog("Re-analyzing frame reference...", 'info');
+            
+            const ac = new AbortController();
+            abortControllerRef.current = ac;
+            
+            const key = apiKeySource === 'custom' ? apiKeys.google : undefined;
+            const subjectNameToExtract = idTransferCharRefId !== 'none' 
+                ? "The character reference" 
+                : (idTransferSubject || "The main subject");
+                
+            const parsed = await analyzeImageToJson(idTransferFrameRef, key, subjectNameToExtract);
+            
+            if (ac.signal.aborted) return;
+    
+            if (parsed.error) {
+                throw new Error(parsed.error);
+            }
+            
+            setIdTransferAction(parsed.subject || '');
+            setIdTransferSetting(parsed.environment || '');
+            setIdTransferLighting([parsed.lighting, parsed.mood].filter(Boolean).join(', '));
+            setIdTransferStyle(parsed.masterArtStyle || parsed.style || '');
+            setIdTransferComposition([parsed.composition, parsed.frame_reference].filter(Boolean).join(', '));
+            
+            if (idTransferCharRefId === 'none' && !idTransferSubject) {
+                setIdTransferSubject('The main subject');
+            }
+            
+            onLog("Frame analysis complete. Prompt structure auto-filled.", 'success');
+        } catch (error: any) {
+            if (abortControllerRef.current?.signal.aborted) return;
+            console.error("Failed to analyze frame image:", error);
+            onLog(`Failed to analyze frame: ${error.message}`, 'error');
+        } finally {
+            if (abortControllerRef.current?.signal?.aborted) return;
+            setIsAnalyzingFrame(false);
+            abortControllerRef.current = null;
+        }
+    };
+
+    const handleGenerate = async () => {
+    setIsLoading(true);
+    onLog("Enhancing prompt with Gemini...", 'info');
+    try {
+        const key = apiKeySource === 'custom' ? apiKeys.google : undefined;
+        const variations = await enhancePrompt(
+            labState.basePrompt,
+            labState.styleModifier,
+            labState.qualityModifier,
+            key
+        );
+        setLabState(s => ({ ...s, generatedPrompts: [...variations, ...s.generatedPrompts] }));
+        onLog("Prompt enhancement complete.", 'success');
+    } catch (error: any) {
+        onLog(`Failed to enhance prompt: ${error.message}`, 'error');
+        console.error(error);
+    } finally {
+        setIsLoading(false);
+    }
+  };
+
+  const handleGenerateSingleImage = async () => {
+    if (!singleImagePrompt.trim() && !singleImageFrameRef) return;
+    setIsGeneratingSingle(true);
+    onLog("Generating single image...", 'info');
+    try {
+        const key = apiKeySource === 'custom' ? apiKeys.google : undefined;
+        let refImage = null;
+        if (singleImageRefId !== 'none' && projectData?.referenceImages) {
+            refImage = projectData.referenceImages.find((r: any) => r.id === singleImageRefId) || null;
+        }
+        
+        const imageUrl = await generateSingleImage(
+            singleImagePrompt,
+            singleImageAspect,
+            refImage,
+            singleImageFrameRef,
+            projectData,
+            key,
+            onLog
+        );
+        setGeneratedSingleImage(imageUrl);
+        onLog("Single image generated successfully.", 'success');
+    } catch (error: any) {
+        onLog(`Failed to generate image: ${error.message}`, 'error');
+        console.error(error);
+    } finally {
+        setIsGeneratingSingle(false);
+    }
+  };
+
+  const handleCopy = (text: string, index: number) => {
+    navigator.clipboard.writeText(text);
+    setCopiedIndex(index);
+    setTimeout(() => setCopiedIndex(null), 2000);
+  };
+
+  const handleDeletePrompt = (indexToDelete: number) => {
+      setLabState(s => ({
+          ...s,
+          generatedPrompts: s.generatedPrompts.filter((_, index) => index !== indexToDelete)
+      }));
+  };
+
+  
+
+  const handleGenerateMultiSwap = async () => {
+      if (!multiSwapFrameRef) {
+          onLog("Please upload a frame reference first.", 'warning');
+          return;
+      }
+      
+      const validMappings = multiSwapMappings.filter(m => m.charId !== 'none' && m.description.trim() !== '');
+      if (validMappings.length === 0) {
+          onLog("Please assign at least one character and provide a description.", 'warning');
+          return;
+      }
+
+      setIsGeneratingMultiSwap(true);
+      onLog("Generating multi-character swap...", 'info');
+      try {
+          const key = apiKeySource === 'custom' ? apiKeys.google : undefined;
+          const url = await generateMultiSwapImage(
+              multiSwapFrameRef,
+              validMappings,
+              projectData,
+              key,
+              onLog
+          );
+          setGeneratedMultiSwapImage(url);
+          onLog("Multi-character swap generated successfully.", 'success');
+      } catch (error: any) {
+          onLog(`Failed to generate image: ${error.message}`, 'error');
+          console.error(error);
+      } finally {
+          setIsGeneratingMultiSwap(false);
+      }
+  };
+
+  const handleGenerateComboBatch = async () => {
+    setIsGeneratingComboBatch(true);
+    try {
+      let availableCombos = ALL_COMBINATIONS.filter(c => !comboUsedCombinos.has(c.id));
+      
+      if (availableCombos.length < comboBatchSize) {
+        onLog?.("Exhausted all combinations! Resetting pool...", "info");
+        availableCombos = [...ALL_COMBINATIONS];
+        setComboUsedCombinos(new Set());
+      }
+
+      const shuffled = [...availableCombos];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      const selectedCombos = shuffled.slice(0, comboBatchSize);
+
+      const comboPromptList = selectedCombos.map((combo, index) => 
+        `Scene ${index + 1}: Moment: "${combo.moment}", Environment: "${combo.environment}", Atmosphere: "${combo.atmosphere}"`
+      ).join('\n');
+
+      const finalPrompt = `
+        You are generating ${comboBatchSize} scenes. 
+        You MUST use the exact Moment, Environment, and Atmosphere combinations provided below for each scene.
+        
+        Assigned Combinations:
+        ${comboPromptList}
+      `;
+
+      const result = await generateComboBatchScenes(finalPrompt, apiKeys.gemini, onLog);
+      
+      setComboBatchScenes(prev => [...prev, ...result]);
+      
+      setComboUsedCombinos(prev => {
+        const newSet = new Set(prev);
+        selectedCombos.forEach(c => newSet.add(c.id));
+        return newSet;
+      });
+      onLog?.("Successfully generated batch!", "success");
+    } catch (error: any) {
+      console.error(error);
+      onLog?.(error.message || "Failed to generate combo batch", "error");
+    } finally {
+      setIsGeneratingComboBatch(false);
+    }
+  };
+
+  const handleClear = () => {
+    setLabState(s => ({ ...s, generatedPrompts: [] }));
+  }
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+        setIsAnalyzing(true);
+        onLog("Compressing image for analysis...", 'info');
+        const compressedBase64 = await compressImage(file);
+        setAnalyzedImage(compressedBase64);
+        
+        const ac = new AbortController();
+        abortControllerAnalyzerRef.current = ac;
+
+        onLog("Analyzing image with Gemini...", 'info');
+        const key = apiKeySource === 'custom' ? apiKeys.google : undefined;
+        const result = await analyzeImageToJson(compressedBase64, key, subjectReplacement, projectData?.referenceImages);
+        
+        if (ac.signal.aborted) return;
+
+        setAnalysisResult(JSON.stringify(result, null, 2));
+        onLog("Image analysis complete.", 'success');
+    } catch (error: any) {
+        if (abortControllerAnalyzerRef.current?.signal.aborted) return;
+        onLog(`Failed to analyze image: ${error.message}`, 'error');
+        console.error(error);
+    } finally {
+        if (!abortControllerAnalyzerRef.current?.signal.aborted) {
+            setIsAnalyzing(false);
+        }
+        abortControllerAnalyzerRef.current = null;
+        if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleStopAnalyzer = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (abortControllerAnalyzerRef.current) {
+          abortControllerAnalyzerRef.current.abort();
+          abortControllerAnalyzerRef.current = null;
+      }
+      setIsAnalyzing(false);
+      onLog("Image analysis stopped by user.", "warning");
+  };
+
+  const handleFrameUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+        const compressedBase64 = await compressImage(file);
+        setSingleImageFrameRef(compressedBase64);
+    } catch (error) {
+        console.error("Failed to compress frame image:", error);
+    } finally {
+        if (frameInputRef.current) frameInputRef.current.value = '';
+    }
+  };
+
+  const handleReanalyze = async () => {
+      if (!analyzedImage) return;
+      try {
+          setIsAnalyzing(true);
+          onLog("Re-analyzing image with new subject...", 'info');
+
+          const ac = new AbortController();
+          abortControllerAnalyzerRef.current = ac;
+
+          const key = apiKeySource === 'custom' ? apiKeys.google : undefined;
+          const result = await analyzeImageToJson(analyzedImage, key, subjectReplacement, projectData?.referenceImages);
+          
+          if (ac.signal.aborted) return;
+
+          setAnalysisResult(JSON.stringify(result, null, 2));
+          onLog("Image re-analysis complete.", 'success');
+      } catch (error: any) {
+          if (abortControllerAnalyzerRef.current?.signal.aborted) return;
+          onLog(`Failed to analyze image: ${error.message}`, 'error');
+          console.error(error);
+      } finally {
+          if (!abortControllerAnalyzerRef.current?.signal.aborted) {
+              setIsAnalyzing(false);
+          }
+          abortControllerAnalyzerRef.current = null;
+      }
+  };
+
+  const handleCopyJson = () => {
+      navigator.clipboard.writeText(analysisResult);
+      setCopiedJson(true);
+      setTimeout(() => setCopiedJson(false), 2000);
+  };
+
+  const handleCopyStyle = (style: string) => {
+      navigator.clipboard.writeText(style);
+      setCopiedStyle(true);
+      setTimeout(() => setCopiedStyle(false), 2000);
+  };
+
+  return (
+    <div className="flex-1 min-h-0 flex flex-col md:flex-row overflow-hidden animate-in fade-in duration-300">
+        <div className="w-full md:w-[420px] border-b md:border-b-0 md:border-r border-white/10 bg-[#0a0a0a] flex-col h-1/2 md:h-full overflow-hidden flex">
+            <div className="p-4 border-b border-white/10 bg-black/50 flex items-center gap-2">
+                <button 
+                    onClick={() => setActiveTab('generator')}
+                    className={`flex-1 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest flex items-center justify-center gap-2 transition-all $
+            {activeTab === 'combo_batch' ? (
+                <>
+                    <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-6 space-y-6">
+                        <div className="space-y-4">
+                            <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-4 text-xs text-indigo-200">
+                                <p className="font-bold mb-1">Combo Batch Generator</p>
+                                <p>Generates scenes with guaranteed unique Moment + Environment + Atmosphere combinations per session.</p>
+                                <p className="mt-2 text-indigo-300">Total Valid Combinations: {ALL_COMBINATIONS.length}</p>
+                                <p className="text-indigo-300">Used Combinations: {comboUsedCombinos.size}</p>
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-white/60">Batch Size (N)</label>
+                                <input 
+                                    type="number" 
+                                    min="1" 
+                                    max="20" 
+                                    value={comboBatchSize} 
+                                    onChange={e => setComboBatchSize(parseInt(e.target.value) || 5)}
+                                    className="w-full bg-black border border-white/10 rounded-xl p-3 text-sm text-white focus:border-indigo-500 outline-none"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                    <div className="p-4 border-t border-white/10 bg-black/20">
+                        <button 
+                            onClick={handleGenerateComboBatch} 
+                            disabled={isGeneratingComboBatch}
+                            className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-sm font-bold flex items-center justify-center gap-3 disabled:opacity-50 transition-all"
+                        >
+                            {isGeneratingComboBatch ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
+                            {isGeneratingComboBatch ? 'Generating...' : 'Generate Batch'}
+                        </button>
+                    </div>
+                </>
+            ) : activeTab === 'generator' ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white/5 text-white/40 hover:text-white'}`}
+                >
+                    <Wand2 className="w-3.5 h-3.5" /> Prompt Gen
+                </button>
+                <button 
+                    onClick={() => setActiveTab('analyzer')}
+                    className={`flex-1 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${activeTab === 'analyzer' ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white/5 text-white/40 hover:text-white'}`}
+                >
+                    <ImageIcon className="w-3.5 h-3.5" /> Image to JSON
+                </button>
+                <button 
+                    onClick={() => setActiveTab('single_image')}
+                    className={`flex-1 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${activeTab === 'single_image' ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white/5 text-white/40 hover:text-white'}`}
+                >
+                    <ImageIcon className="w-3.5 h-3.5" /> Generate
+                </button>
+                <button 
+                    onClick={() => setActiveTab('identity_transfer')}
+                    className={`flex-1 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${activeTab === 'identity_transfer' || activeTab === 'combo_batch' ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white/5 text-white/40 hover:text-white'}`}
+                >
+                    <Sparkles className="w-3.5 h-3.5" /> Identity Transfer
+                </button>
+
+                <button 
+                    onClick={() => setActiveTab('swap_char')}
+                    className={`flex-1 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${activeTab === 'swap_char' ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white/5 text-white/40 hover:text-white'}`}
+                >
+                    <ImageIcon className="w-3.5 h-3.5" /> Swap Char
+                </button>
+            </div>
+
+            {activeTab === 'generator' ? (
+                <>
+                    <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-6 space-y-6">
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-bold text-white/60 flex items-center gap-1.5">Base Prompt</label>
+                            <textarea 
+                                value={labState.basePrompt}
+                                onChange={e => setLabState(s => ({ ...s, basePrompt: e.target.value }))}
+                                className="w-full h-24 bg-black border border-white/10 rounded-xl p-3 text-sm text-white/80 focus:border-indigo-500 outline-none resize-none"
+                            />
+                        </div>
+                         <div className="space-y-2">
+                            <label className="text-[10px] font-bold text-white/60 flex items-center gap-1.5">Style Modifier</label>
+                            <textarea 
+                                value={labState.styleModifier}
+                                onChange={e => setLabState(s => ({ ...s, styleModifier: e.target.value }))}
+                                className="w-full h-16 bg-black border border-white/10 rounded-xl p-3 text-sm text-white/80 focus:border-indigo-500 outline-none resize-none"
+                            />
+                        </div>
+                         <div className="space-y-2">
+                            <label className="text-[10px] font-bold text-white/60 flex items-center gap-1.5">Quality / Details</label>
+                            <textarea 
+                                value={labState.qualityModifier}
+                                onChange={e => setLabState(s => ({ ...s, qualityModifier: e.target.value }))}
+                                className="w-full h-16 bg-black border border-white/10 rounded-xl p-3 text-sm text-white/80 focus:border-indigo-500 outline-none resize-none"
+                            />
+                        </div>
+                    </div>
+                    <div className="p-4 border-t border-white/10 bg-black/50">
+                        <button onClick={handleGenerate} disabled={isLoading} className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-sm font-bold flex items-center justify-center gap-3 disabled:opacity-50 transition-all">
+                            {isLoading ? 'Generating...' : 'Generate Variations'}
+                        </button>
+                    </div>
+                </>
+            
+    
+            ) : activeTab === 'swap_char' ? (
+                <>
+                    <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-6 space-y-6">
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-bold text-white/60 flex items-center gap-1.5">Original Frame</label>
+                            <div 
+                                onClick={() => multiSwapFrameInputRef.current?.click()}
+                                className={`w-full h-32 border-2 border-dashed border-white/20 rounded-xl flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-indigo-500 hover:bg-indigo-500/5 transition-all overflow-hidden relative`}
+                            >
+                                {multiSwapFrameRef ? (
+                                    <img src={multiSwapFrameRef} alt="Frame Ref" className="w-full h-full object-contain" />
+                                ) : (
+                                    <>
+                                        <Upload className="w-5 h-5 text-white/40" />
+                                        <span className="text-[10px] text-white/40 font-bold uppercase tracking-widest">Upload Image</span>
+                                    </>
+                                )}
+                            </div>
+                            {multiSwapFrameRef && (
+                                <button onClick={(e) => { e.stopPropagation(); setMultiSwapFrameRef(null); }} className="text-[10px] text-red-400 hover:text-red-300">Remove Frame</button>
+                            )}
+                            <input type="file" ref={multiSwapFrameInputRef} className="hidden" accept="image/*" onChange={handleMultiSwapFrameUpload} />
+                        </div>
+                        
+                        <div className="space-y-4">
+                            <label className="text-[10px] font-bold text-indigo-400 flex items-center gap-1.5 uppercase tracking-widest">
+                                <Sparkles className="w-3 h-3" /> Character Mappings
+                            </label>
+                            {multiSwapMappings.map((mapping, idx) => (
+                                <div key={idx} className="bg-white/5 p-4 rounded-xl border border-white/10 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-[9px] font-bold text-white/40 uppercase">Mapping {idx + 1}</label>
+                                        {multiSwapMappings.length > 1 && (
+                                            <button 
+                                                onClick={() => setMultiSwapMappings(m => m.filter((_, i) => i !== idx))}
+                                                className="text-[10px] text-red-400 hover:text-red-300"
+                                            >
+                                                Remove
+                                            </button>
+                                        )}
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[9px] font-bold text-white/40 uppercase">Who is this in the image?</label>
+                                        <input 
+                                            value={mapping.description}
+                                            onChange={(e) => {
+                                                const newMappings = [...multiSwapMappings];
+                                                newMappings[idx].description = e.target.value;
+                                                setMultiSwapMappings(newMappings);
+                                            }}
+                                            placeholder="e.g., The woman on the left"
+                                            className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-xs outline-none focus:border-indigo-500 text-white"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[9px] font-bold text-white/40 uppercase">Replace with Character</label>
+                                        <div className="relative w-full">
+                                            <select 
+                                                value={mapping.charId}
+                                                onChange={(e) => {
+                                                    const newMappings = [...multiSwapMappings];
+                                                    newMappings[idx].charId = e.target.value;
+                                                    setMultiSwapMappings(newMappings);
+                                                }}
+                                                className="w-full bg-black border border-white/10 rounded-md px-2 py-2 text-xs outline-none focus:border-indigo-500 text-white appearance-none pr-6"
+                                            >
+                                                <option value="none" className="bg-[#1a1a1a] text-white">Select Character</option>
+                                                {projectData?.referenceImages?.map((ref: any, refIdx: number) => {
+                                                    const linkedChar = ref.characterId ? projectData.characters?.find((c: any) => c.id === ref.characterId) : null;
+                                                    const label = linkedChar ? `${linkedChar.name}` : (ref.description || 'Unnamed');
+                                                    return (
+                                                        <option key={ref.id} value={ref.id} className="bg-[#1a1a1a] text-white">
+                                                            REF_{refIdx + 1} - {label}
+                                                        </option>
+                                                    );
+                                                })}
+                                            </select>
+                                            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30 pointer-events-none" />
+                                        </div>
+                                    </div>
+                                    {mapping.charId !== 'none' && projectData?.referenceImages?.find((r: any) => r.id === mapping.charId) && (
+                                        <div className="w-16 h-16 rounded-lg overflow-hidden border border-white/20 mt-2">
+                                            <img src={projectData.referenceImages.find((r: any) => r.id === mapping.charId).data} alt="Character Reference" className="w-full h-full object-cover" />
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                            <button 
+                                onClick={() => setMultiSwapMappings(m => [...m, { charId: 'none', description: '' }])}
+                                className="w-full py-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs font-bold text-white/60 transition-colors border border-white/10 border-dashed"
+                            >
+                                + Add Character Mapping
+                            </button>
+                        </div>
+                    </div>
+                    <div className="p-4 border-t border-white/10 bg-black/50">
+                        <button onClick={handleGenerateMultiSwap} disabled={isGeneratingMultiSwap || !multiSwapFrameRef} className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-sm font-bold flex items-center justify-center gap-3 disabled:opacity-50 transition-all">
+                            {isGeneratingMultiSwap ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                            {isGeneratingMultiSwap ? 'Swapping...' : 'Swap Characters'}
+                        </button>
+                    </div>
+                </>
+
+            ) : activeTab === 'combo_batch' ? (
+                    <>
+                        {comboBatchScenes.length === 0 && (
+                            <div className="text-center text-white/40 pt-16">
+                                <p>Your generated scenes will appear here.</p>
+                            </div>
+                        )}
+                        {comboBatchScenes.map((scene, index) => (
+                            <div key={index} className="bg-white/5 p-4 rounded-xl border border-white/10 space-y-3">
+                                <h3 className="font-bold text-sm text-white">{scene.title}</h3>
+                                <div className="space-y-1">
+                                    <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Image Prompt</p>
+                                    <p className="text-xs text-white/80">{scene.imagePrompt}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Camera / Motion</p>
+                                    <p className="text-xs text-white/80">{scene.videoMotionPrompt}</p>
+                                </div>
+                            </div>
+                        ))}
+                    </>
+) : activeTab === 'analyzer' ? (
+                <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-6 space-y-6 flex flex-col">
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-white/60 flex items-center gap-1.5">Upload Image</label>
+                        <div 
+                            onClick={() => fileInputRef.current?.click()}
+                            className="w-full aspect-video border-2 border-dashed border-white/20 rounded-xl flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-indigo-500 hover:bg-indigo-500/5 transition-all overflow-hidden relative"
+                        >
+                            {analyzedImage ? (
+                                <img src={analyzedImage} alt="Analyzed" className="w-full h-full object-contain" />
+                            ) : (
+                                <>
+                                    <Upload className="w-6 h-6 text-white/40" />
+                                    <span className="text-xs text-white/40 font-bold uppercase tracking-widest">Select Image</span>
+                                </>
+                            )}
+                            {isAnalyzing && (
+                                <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center gap-3 pointer-events-auto">
+                                    <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
+                                    <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest animate-pulse">Analyzing...</span>
+                                    <button onClick={handleStopAnalyzer} className="mt-2 text-[10px] font-bold text-red-400 hover:text-red-300 bg-red-400/10 px-4 py-1.5 rounded-full transition-colors z-10 relative pointer-events-auto">Stop Analysis</button>
+                                </div>
+                            )}
+                        </div>
+                        <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
+                    </div>
+
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-indigo-400 flex items-center gap-1.5 uppercase tracking-widest">
+                            <Sparkles className="w-3 h-3" /> Subject Replacement (Optional)
+                        </label>
+                        <div className="flex flex-col gap-2">
+                            <div className="flex gap-2">
+                                <select
+                                  value={subjectReplacement.startsWith('REF_') ? subjectReplacement : 'text'}
+                                  onChange={(e) => {
+                                    if (e.target.value === 'text') {
+                                      setSubjectReplacement('');
+                                    } else {
+                                      setSubjectReplacement(e.target.value);
+                                    }
+                                  }}
+                                  className="flex-1 bg-black border border-white/10 rounded-lg px-3 py-2 text-xs outline-none focus:border-indigo-500 text-white appearance-none"
+                                >
+                                  <option value="text" className="bg-[#1a1a1a] text-white">Manual Text Description</option>
+                                  {projectData?.referenceImages?.map((ref: any, idx: number) => {
+                                      const linkedChar = ref.characterId ? projectData.characters?.find((c: any) => c.id === ref.characterId) : null;
+                                      const label = linkedChar ? `Character: ${linkedChar.name}` : (ref.description || 'Unnamed Reference');
+                                      return (
+                                        <option key={ref.id} value={`REF_${idx + 1}`} className="bg-[#1a1a1a] text-white">
+                                          REF_{idx + 1} - {label}
+                                        </option>
+                                      );
+                                  })}
+                                </select>
+                                <button 
+                                    onClick={handleReanalyze}
+                                    disabled={!analyzedImage || isAnalyzing}
+                                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-lg text-xs font-bold transition-colors"
+                                >
+                                    Reanalyze
+                                </button>
+                            </div>
+                            {!subjectReplacement.startsWith('REF_') && (
+                                <input 
+                                    type="text"
+                                    value={subjectReplacement}
+                                    onChange={e => setSubjectReplacement(e.target.value)}
+                                    placeholder="E.g., A futuristic robot dog"
+                                    className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-xs outline-none focus:border-indigo-500 text-white"
+                                />
+                            )}
+                        </div>
+                        <p className="text-[9px] text-white/40 italic">If provided, the AI will keep the exact framing/style but replace the main subject.</p>
+                    </div>
+                    
+                    <div className="flex-1 flex flex-col space-y-2">
+                        <div className="flex items-center justify-between">
+                            <label className="text-[10px] font-bold text-white/60 flex items-center gap-1.5">JSON Output</label>
+                            {analysisResult && (
+                                <button onClick={handleCopyJson} className="flex items-center gap-1.5 px-2 py-1 bg-white/5 hover:bg-white/10 rounded text-[10px] font-bold text-white/60 transition-colors">
+                                    {copiedJson ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />} Copy JSON
+                                </button>
+                            )}
+                        </div>
+                        {analysisResult && (() => {
+                            try {
+                                const parsed = JSON.parse(analysisResult);
+                                return (
+                                    <>
+                                        {parsed.optimizedPrompt && (
+                                            <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3 mb-2">
+                                                <div className="flex items-center justify-between mb-1.5">
+                                                    <label className="text-[10px] font-bold text-green-400 flex items-center gap-1.5 uppercase tracking-widest">
+                                                        <Check className="w-3 h-3" /> Optimized Image Prompt
+                                                    </label>
+                                                    <button onClick={() => handleCopyStyle(parsed.optimizedPrompt)} className="flex items-center gap-1 px-2 py-1 bg-green-500/20 hover:bg-green-500/40 rounded text-[9px] font-bold text-green-300 transition-colors">
+                                                        {copiedStyle ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />} Copy Prompt
+                                                    </button>
+                                                </div>
+                                                <p className="text-xs text-white/90 font-medium leading-relaxed">{parsed.optimizedPrompt}</p>
+                                            </div>
+                                        )}
+                                        {parsed.masterArtStyle && (
+                                            <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-lg p-3 mb-2">
+                                                <div className="flex items-center justify-between mb-1.5">
+                                                    <label className="text-[10px] font-bold text-indigo-400 flex items-center gap-1.5 uppercase tracking-widest">
+                                                        <Palette className="w-3 h-3" /> Master Art Style Prompt
+                                                    </label>
+                                                    <button onClick={() => handleCopyStyle(parsed.masterArtStyle)} className="flex items-center gap-1 px-2 py-1 bg-indigo-500/20 hover:bg-indigo-500/40 rounded text-[9px] font-bold text-indigo-300 transition-colors">
+                                                        {copiedStyle ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />} Copy Style
+                                                    </button>
+                                                </div>
+                                                <p className="text-xs text-white/90 font-medium leading-relaxed">{parsed.masterArtStyle}</p>
+                                            </div>
+                                        )}
+                                    </>
+                                );
+                            } catch (e) {}
+                            return null;
+                        })()}
+                        <textarea 
+                            value={analysisResult}
+                            readOnly
+                            placeholder="JSON output will appear here..."
+                            className="flex-1 w-full bg-black border border-white/10 rounded-xl p-3 text-xs text-indigo-200 font-mono focus:border-indigo-500 outline-none resize-none custom-scrollbar"
+                        />
+                    </div>
+                </div>
+            ) : activeTab === 'single_image' ? (
+                <>
+                    <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-6 space-y-6">
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-bold text-white/60 flex items-center gap-1.5">Image Prompt</label>
+                            <textarea 
+                                value={singleImagePrompt}
+                                onChange={e => setSingleImagePrompt(e.target.value)}
+                                className="w-full h-32 bg-black border border-white/10 rounded-xl p-3 text-sm text-white/80 focus:border-indigo-500 outline-none resize-none"
+                                placeholder="Enter a detailed prompt for the image..."
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-bold text-white/60 flex items-center gap-1.5">Aspect Ratio</label>
+                            <div className="relative">
+                                <select 
+                                    value={singleImageAspect} 
+                                    onChange={(e) => setSingleImageAspect(e.target.value as AspectRatio)} 
+                                    className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-xs outline-none focus:border-indigo-500 text-white appearance-none pr-10"
+                                >
+                                    <option value="16:9" className="bg-[#1a1a1a] text-white">16:9 Landscape</option>
+                                    <option value="14:9" className="bg-[#1a1a1a] text-white">14:9 Widescreen</option>
+                                    <option value="9:16" className="bg-[#1a1a1a] text-white">9:16 Portrait</option>
+                                    <option value="8:15" className="bg-[#1a1a1a] text-white">8:15 Portrait</option>
+                                    <option value="1:1" className="bg-[#1a1a1a] text-white">1:1 Square</option>
+                                    <option value="4:3" className="bg-[#1a1a1a] text-white">4:3 Retro</option>
+                                    <option value="3:4" className="bg-[#1a1a1a] text-white">3:4 Tall</option>
+                                    <option value="2.35:1" className="bg-[#1a1a1a] text-white">2.35:1 Cinema</option>
+                                </select>
+                                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30 pointer-events-none" />
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-bold text-white/60 flex items-center gap-1.5">Character Reference (Optional)</label>
+                            <div className="relative">
+                                <select 
+                                    value={singleImageRefId} 
+                                    onChange={(e) => setSingleImageRefId(e.target.value)} 
+                                    className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-xs outline-none focus:border-indigo-500 text-white appearance-none pr-10"
+                                >
+                                    <option value="none" className="bg-[#1a1a1a] text-white">None</option>
+                                    {projectData?.referenceImages?.map((ref: any, idx: number) => {
+                                        const linkedChar = ref.characterId ? projectData.characters?.find((c: any) => c.id === ref.characterId) : null;
+                                        const label = linkedChar ? `Character: ${linkedChar.name}` : (ref.description || 'Unnamed Reference');
+                                        return (
+                                            <option key={ref.id} value={ref.id} className="bg-[#1a1a1a] text-white">
+                                                REF_{idx + 1} - {label}
+                                            </option>
+                                        );
+                                    })}
+                                </select>
+                                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30 pointer-events-none" />
+                            </div>
+                            {singleImageRefId !== 'none' && projectData?.referenceImages?.find((r: any) => r.id === singleImageRefId) && (
+                                <div className="mt-2 w-24 h-24 rounded-xl overflow-hidden border border-white/20">
+                                    <img src={projectData.referenceImages.find((r: any) => r.id === singleImageRefId).data} alt="Character Reference" className="w-full h-full object-cover" />
+                                </div>
+                            )}
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-bold text-white/60 flex items-center gap-1.5">Frame / Composition Reference (Optional)</label>
+                            <div 
+                                onClick={() => frameInputRef.current?.click()}
+                                className="w-full h-24 border-2 border-dashed border-white/20 rounded-xl flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-indigo-500 hover:bg-indigo-500/5 transition-all overflow-hidden relative"
+                            >
+                                {singleImageFrameRef ? (
+                                    <img src={singleImageFrameRef} alt="Frame Ref" className="w-full h-full object-contain" />
+                                ) : (
+                                    <>
+                                        <Upload className="w-5 h-5 text-white/40" />
+                                        <span className="text-[10px] text-white/40 font-bold uppercase tracking-widest">Upload Frame</span>
+                                    </>
+                                )}
+                            </div>
+                            {singleImageFrameRef && (
+                                <button onClick={(e) => { e.stopPropagation(); setSingleImageFrameRef(null); }} className="text-[10px] text-red-400 hover:text-red-300">Remove Frame</button>
+                            )}
+                            <input type="file" ref={frameInputRef} className="hidden" accept="image/*" onChange={handleFrameUpload} />
+                        </div>
+                    </div>
+                    <div className="p-4 border-t border-white/10 bg-black/50">
+                        <button onClick={handleGenerateSingleImage} disabled={isGeneratingSingle || (!singleImagePrompt.trim() && !singleImageFrameRef)} className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-sm font-bold flex items-center justify-center gap-3 disabled:opacity-50 transition-all">
+                            {isGeneratingSingle ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />}
+                            {isGeneratingSingle ? 'Generating...' : 'Generate Image'}
+                        </button>
+                    </div>
+                </>
+            ) : (
+                <>
+                    <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-6 space-y-6">
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-bold text-white/60 flex items-center gap-1.5">Base Scene / Frame Reference</label>
+                            <div 
+                                onClick={() => !isAnalyzingFrame && idTransferFrameInputRef.current?.click()}
+                                className={`w-full h-24 border-2 border-dashed border-white/20 rounded-xl flex flex-col items-center justify-center gap-2 ${isAnalyzingFrame ? 'cursor-wait opacity-50' : 'cursor-pointer hover:border-indigo-500 hover:bg-indigo-500/5'} transition-all overflow-hidden relative`}
+                            >
+                                {idTransferFrameRef ? (
+                                    <img src={idTransferFrameRef} alt="Frame Ref" className="w-full h-full object-contain" />
+                                ) : (
+                                    <>
+                                        <Upload className="w-5 h-5 text-white/40" />
+                                        <span className="text-[10px] text-white/40 font-bold uppercase tracking-widest">Upload Frame</span>
+                                    </>
+                                )}
+                                {isAnalyzingFrame && (
+                                    <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center gap-2 pointer-events-auto">
+                                        <Loader2 className="w-6 h-6 text-indigo-500 animate-spin" />
+                                        <span className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest animate-pulse">Analyzing...</span>
+                                        <button onClick={handleStopIdTransferAnalysis} className="mt-2 text-[10px] font-bold text-red-400 hover:text-red-300 bg-red-400/10 px-3 py-1 rounded-full transition-colors z-10 relative pointer-events-auto">Stop Analysis</button>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="flex items-center gap-3">
+                                {idTransferFrameRef && !isAnalyzingFrame && (
+                                    <button onClick={(e) => { e.stopPropagation(); setIdTransferFrameRef(null); }} className="text-[10px] text-red-400 hover:text-red-300">Remove Frame</button>
+                                )}
+                                {idTransferFrameRef && !isAnalyzingFrame && (
+                                    <button onClick={handleReanalyzeIdTransferFrame} className="text-[10px] text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded transition-colors">Reanalyze Frame</button>
+                                )}
+                            </div>
+                            <input type="file" ref={idTransferFrameInputRef} className="hidden" accept="image/*" onChange={handleIdTransferFrameUpload} />
+                        </div>
+                        <div className="space-y-4">
+                            <label className="text-[10px] font-bold text-indigo-400 flex items-center gap-1.5 uppercase tracking-widest">
+                                <Sparkles className="w-3 h-3" /> Prompt Structure
+                            </label>
+                            <div className="space-y-3 bg-white/5 p-4 rounded-xl border border-white/5">
+                                <div className="flex items-center justify-between">
+                                    <label className="text-[9px] font-bold text-white/40 uppercase">Subject</label>
+                                    <div className="relative w-48">
+                                        <select 
+                                            value={idTransferCharRefId} 
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                setIdTransferCharRefId(val);
+                                                if (val !== 'none') {
+                                                    const ref = projectData?.referenceImages?.find((r: any) => r.id === val);
+                                                    const linkedChar = ref?.characterId ? projectData.characters?.find((c: any) => c.id === ref.characterId) : null;
+                                                    const name = linkedChar ? linkedChar.name : (ref?.description || 'The character');
+                                                    setIdTransferSubject(name);
+                                                }
+                                            }} 
+                                            className="w-full bg-black border border-white/10 rounded-md px-2 py-1.5 text-[10px] outline-none focus:border-indigo-500 text-white appearance-none pr-6"
+                                        >
+                                            <option value="none" className="bg-[#1a1a1a] text-white">No Character Ref</option>
+                                            {projectData?.referenceImages?.map((ref: any, idx: number) => {
+                                                const linkedChar = ref.characterId ? projectData.characters?.find((c: any) => c.id === ref.characterId) : null;
+                                                const label = linkedChar ? `${linkedChar.name}` : (ref.description || 'Unnamed');
+                                                return (
+                                                    <option key={ref.id} value={ref.id} className="bg-[#1a1a1a] text-white">
+                                                        REF_{idx + 1} - {label}
+                                                    </option>
+                                                );
+                                            })}
+                                        </select>
+                                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-white/30 pointer-events-none" />
+                                    </div>
+                                </div>
+                                <input 
+                                    value={idTransferSubject}
+                                    onChange={e => setIdTransferSubject(e.target.value)}
+                                    placeholder="e.g., A young woman with long wavy brown hair wearing a red cloak"
+                                    className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-xs outline-none focus:border-indigo-500 text-white"
+                                />
+                                {idTransferCharRefId !== 'none' && projectData?.referenceImages?.find((r: any) => r.id === idTransferCharRefId) && (
+                                    <div className="w-16 h-16 rounded-lg overflow-hidden border border-white/20 mt-2">
+                                        <img src={projectData.referenceImages.find((r: any) => r.id === idTransferCharRefId).data} alt="Character Reference" className="w-full h-full object-cover" />
+                                    </div>
+                                )}
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[9px] font-bold text-white/40 uppercase">Action / Pose</label>
+                                <input 
+                                    value={idTransferAction}
+                                    onChange={e => setIdTransferAction(e.target.value)}
+                                    placeholder="e.g., walking on a misty forest path"
+                                    className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-xs outline-none focus:border-indigo-500 text-white"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[9px] font-bold text-white/40 uppercase">Setting / Environment</label>
+                                <input 
+                                    value={idTransferSetting}
+                                    onChange={e => setIdTransferSetting(e.target.value)}
+                                    placeholder="e.g., misty forest path at dawn"
+                                    className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-xs outline-none focus:border-indigo-500 text-white"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[9px] font-bold text-white/40 uppercase">Lighting / Mood</label>
+                                <input 
+                                    value={idTransferLighting}
+                                    onChange={e => setIdTransferLighting(e.target.value)}
+                                    placeholder="e.g., soft golden hour lighting, ethereal atmosphere"
+                                    className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-xs outline-none focus:border-indigo-500 text-white"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[9px] font-bold text-white/40 uppercase">Master Art Style</label>
+                                <textarea 
+                                    value={idTransferStyle}
+                                    onChange={e => setIdTransferStyle(e.target.value)}
+                                    placeholder="e.g., highly detailed cinematic photography, 8k..."
+                                    className="w-full h-24 bg-black border border-white/10 rounded-lg p-3 text-xs outline-none focus:border-indigo-500 text-white resize-none custom-scrollbar"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[9px] font-bold text-white/40 uppercase">Composition</label>
+                                <input 
+                                    value={idTransferComposition}
+                                    onChange={e => setIdTransferComposition(e.target.value)}
+                                    placeholder="e.g., cinematic composition, wide establishing shot"
+                                    className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-xs outline-none focus:border-indigo-500 text-white"
+                                />
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-bold text-white/60 flex items-center gap-1.5">Aspect Ratio</label>
+                            <div className="relative">
+                                <select 
+                                    value={idTransferAspect} 
+                                    onChange={(e) => setIdTransferAspect(e.target.value as AspectRatio)} 
+                                    className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-xs outline-none focus:border-indigo-500 text-white appearance-none pr-10"
+                                >
+                                    <option value="16:9" className="bg-[#1a1a1a] text-white">16:9 Landscape</option>
+                                    <option value="14:9" className="bg-[#1a1a1a] text-white">14:9 Widescreen</option>
+                                    <option value="9:16" className="bg-[#1a1a1a] text-white">9:16 Portrait</option>
+                                    <option value="8:15" className="bg-[#1a1a1a] text-white">8:15 Portrait</option>
+                                    <option value="1:1" className="bg-[#1a1a1a] text-white">1:1 Square</option>
+                                    <option value="4:3" className="bg-[#1a1a1a] text-white">4:3 Retro</option>
+                                    <option value="3:4" className="bg-[#1a1a1a] text-white">3:4 Tall</option>
+                                    <option value="2.35:1" className="bg-[#1a1a1a] text-white">2.35:1 Cinema</option>
+                                </select>
+                                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30 pointer-events-none" />
+                            </div>
+                        </div>
+                    </div>
+                    <div className="p-4 border-t border-white/10 bg-black/50">
+                        <button onClick={async () => {
+                            setIsGeneratingIdTransfer(true);
+                            onLog("Starting Identity Transfer generation...", 'info');
+                            try {
+                                const key = apiKeySource === 'custom' ? apiKeys.google : undefined;
+                                const refImage = idTransferCharRefId !== 'none' ? projectData?.referenceImages?.find((r: any) => r.id === idTransferCharRefId) : null;
+                                
+                                const promptParts = [
+                                    idTransferSubject,
+                                    idTransferAction,
+                                    idTransferSetting,
+                                    idTransferLighting,
+                                    idTransferStyle,
+                                    idTransferComposition
+                                ].filter(p => p.trim() !== '');
+                                
+                                const finalPrompt = promptParts.join(', ');
+                                
+                                const url = await generateSingleImage(
+                                    finalPrompt,
+                                    idTransferAspect,
+                                    refImage || null,
+                                    idTransferFrameRef,
+                                    projectData,
+                                    key,
+                                    onLog
+                                );
+                                setGeneratedIdTransferImage(url);
+                                onLog("Identity Transfer image generated successfully.", 'success');
+                            } catch (error: any) {
+                                onLog(`Failed to generate image: ${error.message}`, 'error');
+                                console.error(error);
+                            } finally {
+                                setIsGeneratingIdTransfer(false);
+                            }
+                        }} disabled={isGeneratingIdTransfer || (!idTransferFrameRef && idTransferCharRefId === 'none')} className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-sm font-bold flex items-center justify-center gap-3 disabled:opacity-50 transition-all">
+                            {isGeneratingIdTransfer ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                            {isGeneratingIdTransfer ? 'Generating...' : 'Transfer Identity'}
+                        </button>
+                    </div>
+                </>
+            )}
+        </div>
+
+        <div className="flex-1 h-1/2 md:h-full overflow-hidden bg-dots flex flex-col">
+            <div className="p-4 border-b border-white/10 bg-black/30 backdrop-blur-sm flex items-center justify-between">
+                <h2 className="text-sm font-bold text-white flex items-center gap-2"><Sparkles className="w-4 h-4 text-indigo-400" /> {activeTab === 'generator' ? 'Generated Prompts' : activeTab === 'analyzer' ? 'Analysis Results' : activeTab === 'single_image' ? 'Generated Image' : activeTab === 'combo_batch' ? 'Combo Batch Scenes' : activeTab === 'swap_char' ? 'Swapped Image' : 'Identity Transfer'}</h2>
+                {(activeTab === 'generator' || activeTab === 'combo_batch') && (
+                    <button onClick={handleClear} className="p-2 text-white/40 hover:text-red-400 transition-colors" title="Clear All">
+                        <Trash2 className="w-4 h-4" />
+                    </button>
+                )}
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-4 md:p-6 space-y-3">
+                {activeTab === 'generator' ? (
+                    <>
+                        {labState.generatedPrompts.length === 0 && (
+                            <div className="text-center text-white/40 pt-16">
+                                <p>Your generated prompt variations will appear here.</p>
+                            </div>
+                        )}
+                        {labState.generatedPrompts.map((prompt, index) => (
+                            <div key={index} className="bg-white/5 p-3 rounded-lg border border-white/10 flex items-start justify-between gap-3">
+                                <textarea 
+                                    value={prompt}
+                                    onChange={(e) => {
+                                        const newPrompts = [...labState.generatedPrompts];
+                                        newPrompts[index] = e.target.value;
+                                        setLabState(s => ({ ...s, generatedPrompts: newPrompts }));
+                                    }}
+                                    className="text-xs text-white/80 flex-1 bg-transparent border-none outline-none resize-none custom-scrollbar"
+                                    rows={3}
+                                />
+                                <div className="flex flex-col gap-1 shrink-0">
+                                    <button onClick={() => handleCopy(prompt, index)} className="p-1.5 bg-white/10 rounded-md hover:bg-indigo-500 text-white/60 hover:text-white transition-colors" title="Copy">
+                                        {copiedIndex === index ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+                                    </button>
+                                    <button onClick={() => handleDeletePrompt(index)} className="p-1.5 bg-white/10 rounded-md hover:bg-red-500 text-white/60 hover:text-white transition-colors" title="Delete">
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </>
+                ) : activeTab === 'analyzer' ? (
+                    <div className="h-full flex items-center justify-center text-white/20">
+                        {analysisResult ? (
+                            <div className="w-full h-full p-4 bg-black/50 rounded-xl border border-white/5 overflow-y-auto custom-scrollbar">
+                                <pre className="text-xs text-indigo-300 font-mono whitespace-pre-wrap">{analysisResult}</pre>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col items-center gap-4">
+                                <ImageIcon className="w-16 h-16 opacity-20" />
+                                <p className="uppercase tracking-widest font-bold text-sm">Upload an image to analyze</p>
+                            </div>
+                        )}
+                    </div>
+                ) : activeTab === 'single_image' ? (
+                    <div className="h-full flex items-center justify-center text-white/20 relative group">
+                        {generatedSingleImage ? (
+                            <div className="w-full h-full flex flex-col items-center justify-center p-4 relative">
+                                <img src={generatedSingleImage} alt="Generated" className="max-w-full max-h-full object-contain rounded-xl shadow-2xl border border-white/10" />
+                                <div className="absolute top-6 right-6 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+                                    <a 
+                                        href={generatedSingleImage} 
+                                        download="generated-image.png"
+                                        className="p-2 bg-black/50 hover:bg-indigo-600 rounded-lg backdrop-blur-sm border border-white/10 text-white transition-colors"
+                                        title="Download Image"
+                                    >
+                                        <Download className="w-4 h-4" />
+                                    </a>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col items-center gap-4">
+                                <ImageIcon className="w-16 h-16 opacity-20" />
+                                <p className="uppercase tracking-widest font-bold text-sm">Your generated image will appear here</p>
+                            </div>
+                        )}
+                    </div>
+                ) : activeTab === 'swap_char' ? (
+                    <div className="h-full flex items-center justify-center text-white/20 relative group">
+                        {generatedMultiSwapImage ? (
+                            <div className="w-full h-full flex flex-col items-center justify-center p-4 relative">
+                                <img src={generatedMultiSwapImage} alt="Generated" className="max-w-full max-h-full object-contain rounded-xl shadow-2xl border border-white/10" />
+                                <div className="absolute top-6 right-6 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+                                    <a href={generatedMultiSwapImage} download={`swapped_${Date.now()}.png`} className="p-2 bg-black/50 hover:bg-indigo-600 rounded-lg text-white transition-all backdrop-blur-sm" title="Download Image">
+                                        <Download className="w-4 h-4" />
+                                    </a>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col items-center gap-4">
+                                <ImageIcon className="w-16 h-16 opacity-20" />
+                                <p className="uppercase tracking-widest font-bold text-sm">Your swapped image will appear here</p>
+                            </div>
+                        )}
+                    </div>
+                ) : activeTab === 'combo_batch' ? (
+                    <div className="h-full flex items-center justify-center text-white/20 relative group">
+                        {generatedComboBatchImages && generatedComboBatchImages.length > 0 ? (
+                            <div className="w-full h-full flex flex-col items-center justify-center p-4 relative">
+                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 overflow-y-auto w-full max-h-full custom-scrollbar p-2">
+                                    {generatedComboBatchImages.map((img, idx) => (
+                                        <div key={idx} className="relative group/item aspect-video bg-black/50 rounded-xl overflow-hidden border border-white/10 shadow-lg">
+                                            <img src={img} alt={`Generated scene ${idx + 1}`} className="w-full h-full object-cover" />
+                                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover/item:opacity-100 transition-opacity flex items-center justify-center">
+                                                <a href={img} download={`scene_${Date.now()}_${idx}.png`} className="p-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-white" title="Download">
+                                                    <Download className="w-4 h-4" />
+                                                </a>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col items-center gap-4">
+                                <ImageIcon className="w-16 h-16 opacity-20" />
+                                <p className="uppercase tracking-widest font-bold text-sm">Your combo batch images will appear here</p>
+                            </div>
+                        )}
+                    </div>
+                ) : (
+                    <div className="h-full flex items-center justify-center text-white/20 relative group">
+                        {generatedIdTransferImage ? (
+                            <div className="w-full h-full flex flex-col items-center justify-center p-4 relative">
+                                <img src={generatedIdTransferImage} alt="Generated Identity Transfer" className="max-w-full max-h-full object-contain rounded-xl shadow-2xl border border-white/10" />
+                                <div className="absolute top-6 right-6 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+                                    <a 
+                                        href={generatedIdTransferImage} 
+                                        download="identity-transfer.png"
+                                        className="p-2 bg-black/50 hover:bg-indigo-600 rounded-lg backdrop-blur-sm border border-white/10 text-white transition-colors"
+                                        title="Download Image"
+                                    >
+                                        <Download className="w-4 h-4" />
+                                    </a>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col items-center gap-4">
+                                <ImageIcon className="w-16 h-16 opacity-20" />
+                                <p className="uppercase tracking-widest font-bold text-sm">Your identity transfer image will appear here</p>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+        </div>
+    </div>
+  );
+};
+
+export default PromptGenerator;
+
