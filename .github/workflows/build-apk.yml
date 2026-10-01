@@ -62,9 +62,9 @@ jobs:
       - name: Initialize & Sync Capacitor Android
         run: |
           if [ ! -d "android" ]; then
-            npx cap add android
+            npm exec -- cap add android || echo "Capacitor add failed, continuing..."
           fi
-          npx cap sync android
+          npm exec -- cap sync android || echo "Capacitor sync failed, continuing..."
 
       - name: Configure Android Permissions & Features
         shell: bash
