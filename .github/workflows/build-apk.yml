@@ -49,17 +49,14 @@ jobs:
           cache: gradle
 
       - name: Setup Android SDK
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq android-sdk android-sdk-platform-tools android-sdk-build-tools
-
-      - name: Install Android Components
-        run: |
-          export ANDROID_SDK_ROOT=/usr/lib/android-sdk
-          export PATH=$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin
-          
-          yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT "platforms;android-34" "build-tools;34.0.0" "platform-tools" 2>&1 || true
-          yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses 2>&1 || true
+        uses: android-actions/setup-android@v3
+        with:
+          accept-android-sdk-licenses: true
+          packages: |
+            platforms;android-35
+            build-tools;34.0.0
+            platform-tools
+            cmdline-tools;latest
 
       - name: Initialize Capacitor Android Project
         run: |
@@ -99,13 +96,12 @@ jobs:
 
       - name: Build Android Debug APK
         env:
-          ANDROID_SDK_ROOT: /usr/lib/android-sdk
-          ANDROID_HOME: /usr/lib/android-sdk
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
+          ANDROID_HOME: ${{ env.ANDROID_HOME }}
           GRADLE_OPTS: -Xmx2048m
         working-directory: ./android
         run: |
           chmod +x gradlew
-          ./gradlew --version
           ./gradlew clean
           ./gradlew assembleDebug --no-daemon --info
 
