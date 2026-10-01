@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ApiKeys, ApiKeySource } from '@/types';
 import { X, Key, Shield, Check, AlertCircle, LogOut, User as UserIcon, Loader2 } from 'lucide-react';
-import { signInWithGoogle, signOutGoogle, listenAuthState } from '@/services/auth';
+import { signInWithGoogle, signOutGoogle, listenAuthState, isNativeEnvironment } from '@/services/auth';
 import type { User } from 'firebase/auth';
 
 interface ApiKeyVaultProps {
@@ -120,6 +120,19 @@ export const ApiKeyVault: React.FC<ApiKeyVaultProps> = ({ isOpen, onClose, curre
                   <LogOut className="w-3.5 h-3.5" />
                   <span>Sign Out</span>
                 </button>
+              </div>
+            ) : isNativeEnvironment() ? (
+              <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 space-y-2 text-xs">
+                <div className="flex items-center gap-2 text-amber-300 font-bold">
+                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                  <span>Android APK Standalone Mode</span>
+                </div>
+                <p className="text-[11px] text-white/70 leading-relaxed">
+                  Web popup login is disabled inside Android APK WebViews (which run on <code className="text-amber-300">https://localhost</code> and lack popup window handlers).
+                </p>
+                <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-[11px] font-medium leading-relaxed">
+                  ✨ <strong>No login required:</strong> You have 100% full access to all features (Production Director, Story Mode, Suno Music, Subtitles, Storyboard) via the <strong>Built-in API Key</strong> or <strong>Custom API Keys</strong> below!
+                </div>
               </div>
             ) : (
               <div className="space-y-2">

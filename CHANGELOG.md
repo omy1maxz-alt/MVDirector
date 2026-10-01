@@ -1,3 +1,25 @@
+### Fixed
+- **Resolved React DOM Unknown Event Handler Warning onBuffer/onBufferEnd (`SubtitleTimelineEditor.tsx`, `App.tsx`)**:
+  - Removed non-standard `onBuffer` and `onBufferEnd` props from `<Player />` that leaked into underlying `<video>` DOM elements in `react-player`'s fallback, eliminating `Warning: Unknown event handler property onBuffer/onBufferEnd`.
+
+### Added
+- **Hacker's Keyboard Shortcut Support & Clipboard Fallback (`keyboardSupport.ts`, `main.tsx`)**:
+  - Implemented global modifier accelerator listeners for Android virtual keyboards (such as Hacker's Keyboard), enabling `Ctrl+A` (Select All), `Ctrl+Shift+Home` (Select to start), `Ctrl+Shift+End` (Select to end), `Ctrl+Home`/`Ctrl+End`, and asynchronous `Ctrl+V` clipboard fallback.
+- **WebView Browser Test Tab (`BrowserTab.tsx`, `App.tsx`)**:
+  - Added a dedicated "Web Test" tab in the mobile bottom navigation bar for testing WebView browsing and iframe behavior directly on Android APK.
+  - Features an address bar, reload, external system browser pop-out, and test presets (`YouTube Embed Test`, `YouTube Mobile`, `Wikipedia`, `Bing`, `DuckDuckGo`).
+- **YouTube URL Normalization & Comprehensive Playback Logs (`youtube.ts`, `SubtitleTimelineEditor.tsx`, `SubtitlesTab.tsx`, `App.tsx`)**:
+  - Added `normalizeYoutubeUrl()` to clean zero-width characters, mobile newlines, shorts, and bare 11-character video IDs.
+  - Added explicit diagnostic logs (`[YouTube Load]`, `[YouTube Player]`) capturing user input, URL parsing, buffer events, and playback errors into the in-app Diagnostic Log Capture.
+  - Automatically initiates playback upon loading valid video URLs and shows a confirmation toast with video ID.
+
+### Fixed
+- **Android APK Firebase Auth Handler & Standalone Mode (`auth.ts`, `ApiKeyVault.tsx`, `App.tsx`)**:
+  - Resolved the `The requested action is invalid` error on Android APK when opening Firebase's `__/auth/handler` by detecting the native WebView environment (`isNativeEnvironment`).
+  - Web popup Google sign-in requires a browser window parent (`window.opener`), which does not exist inside Android WebViews running at `https://localhost`.
+  - Replaced the sign-in prompt on APK with an intuitive Standalone Mode card clarifying that all features (Director, Suno, Subtitles, Vision) work 100% via Built-in or Custom API keys with no login required.
+  - Adjusted top mobile header action to display "API Keys" instead of "Sign In" when running as an APK.
+
 ### Added
 - **Android WebView Diagnostic Log Capture (`logCapture.ts`, `CaptureLogsModal.tsx`, `App.tsx`)**:
   - Implemented comprehensive in-app log capture engine intercepting `console.log`, `console.info`, `console.warn`, `console.error`, `fetch` network requests, `window.onerror`, and `unhandledrejection`.

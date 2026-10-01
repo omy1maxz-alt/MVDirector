@@ -24,6 +24,8 @@ import { InstructionPresetsModal } from '@/components/InstructionPresetsModal';
 import { GitHubConnectModal } from '@/components/GitHubConnectModal';
 import { CrashLogsModal } from '@/components/CrashLogsModal';
 import { CaptureLogsModal } from '@/components/CaptureLogsModal';
+import { BrowserTab } from '@/components/BrowserTab';
+import { normalizeYoutubeUrl } from '@/services/youtube';
 import { AspectRatioDropdown } from '@/components/AspectRatioDropdown';
 import { GlobalCharacterDropdown } from '@/components/GlobalCharacterDropdown';
 import { StudioChat } from '@/components/StudioChat';
@@ -36,7 +38,7 @@ import { OfflineIndicator } from '@/components/OfflineIndicator';
 import ReactPlayer from 'react-player';
 import { compressImage } from '@/utils/imageUtils';
 import { motion, useDragControls } from 'motion/react';
-import { listenAuthState } from '@/services/auth';
+import { listenAuthState, isNativeEnvironment } from '@/services/auth';
 import type { User } from 'firebase/auth';
 // FIX: Import missing 'Key' icon from lucide-react.
 import { 
@@ -45,7 +47,7 @@ import {
   BookOpen, Sliders, Image as ImageIcon, Upload, FileText,
   Clock, Hash, Maximize, Palette, Loader2, Download, ScrollText,
   HelpCircle, Server, Copy, Check, Film, ListOrdered, FilePlus, Bot, XCircle, ChevronDown, Key, Star, ShieldAlert, MessageSquare, Edit3, Save, Repeat, Minus, Play, Pause, SkipForward, SkipBack, RefreshCw,
-  Subtitles, Eye, EyeOff, Scan, Youtube, Video, FolderOpen, Brain, Github, Bug } from 'lucide-react';
+  Subtitles, Eye, EyeOff, Scan, Youtube, Video, FolderOpen, Brain, Github, Bug, Globe } from 'lucide-react';
 
 const Player = ReactPlayer as any;
 
@@ -225,7 +227,7 @@ export const App: React.FC = () => {
   const [isDirecting, setIsDirecting] = useState(false);
   const [directorError, setDirectorError] = useState<string | null>(null);
   const [isBatchGenerating, setIsBatchGenerating] = useState(false);
-  const [activeTab, setActiveTab] = useState<'director' | 'storyboard' | 'studio' | 'lab' | 'system' | 'music' | 'subtitles' | 'keyframes' | 'xplore'>('director');
+  const [activeTab, setActiveTab] = useState<'director' | 'storyboard' | 'studio' | 'lab' | 'system' | 'music' | 'subtitles' | 'keyframes' | 'xplore' | 'browser'>('director');
   const [showKeyVault, setShowKeyVault] = useState(false);
   const [googleUser, setGoogleUser] = useState<User | null>(null);
 
@@ -1348,6 +1350,11 @@ export const App: React.FC = () => {
                             )}
                             <span className="hidden lg:inline text-white/90 font-medium max-w-[90px] truncate">{googleUser.displayName || 'Google'}</span>
                         </>
+                    ) : isNativeEnvironment() ? (
+                        <>
+                            <Key className="w-3.5 h-3.5 text-indigo-400" />
+                            <span className="hidden sm:inline text-white/70 font-semibold">API Keys</span>
+                        </>
                     ) : (
                         <>
                             <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
@@ -1856,6 +1863,9 @@ export const App: React.FC = () => {
           <div className={`flex-1 min-h-0 flex-col overflow-hidden ${activeTab === 'xplore' ? 'flex' : 'hidden'}`}>
             <XploreTab projectData={projectData} directorPlan={directorPlan} />
           </div>
+          <div className={`flex-1 min-h-0 flex-col overflow-hidden ${activeTab === 'browser' ? 'flex' : 'hidden'}`}>
+            <BrowserTab onOpenCaptureLogs={() => setShowCaptureLogs(true)} />
+          </div>
           <div className={`flex-1 min-h-0 flex-col overflow-hidden ${activeTab === 'music' ? 'flex' : 'hidden'}`}>
              <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
                  <div className="max-w-4xl mx-auto space-y-8">
@@ -1882,7 +1892,11 @@ export const App: React.FC = () => {
                                          onChange={(e) => setLocalSoundtrackUrl(e.target.value)}
                                          onKeyDown={(e) => {
                                              if (e.key === 'Enter') {
-                                                 setProjectData(p => ({ ...p, soundtrackUrl: localSoundtrackUrl, localPlaylist: undefined, currentTrackIndex: undefined, localFiles: undefined }));
+                                                 const raw = (localSoundtrackUrl || '').trim();
+                                                 console.info(`[MusicTab] Enter pressed with soundtrack URL: "${raw}"`);
+                                                 const { url: clean, videoId, isValid } = normalizeYoutubeUrl(raw);
+                                                 console.info(`[MusicTab] Normalized -> clean: "${clean}", videoId: "${videoId}", isValid: ${isValid}`);
+                                                 setProjectData(p => ({ ...p, soundtrackUrl: clean || raw, localPlaylist: undefined, currentTrackIndex: undefined, localFiles: undefined }));
                                                  setIsPlaying(true);
                                              }
                                          }}
@@ -1891,7 +1905,11 @@ export const App: React.FC = () => {
                                      />
                                      <button 
                                          onClick={() => {
-                                             setProjectData(p => ({ ...p, soundtrackUrl: localSoundtrackUrl, localPlaylist: undefined, currentTrackIndex: undefined, localFiles: undefined }));
+                                             const raw = (localSoundtrackUrl || '').trim();
+                                             console.info(`[MusicTab] Play pressed with soundtrack URL: "${raw}"`);
+                                             const { url: clean, videoId, isValid } = normalizeYoutubeUrl(raw);
+                                             console.info(`[MusicTab] Normalized -> clean: "${clean}", videoId: "${videoId}", isValid: ${isValid}`);
+                                             setProjectData(p => ({ ...p, soundtrackUrl: clean || raw, localPlaylist: undefined, currentTrackIndex: undefined, localFiles: undefined }));
                                              setIsPlaying(true);
                                          }}
                                          className="px-4 py-3 bg-pink-500 hover:bg-pink-600 text-white rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-2"
@@ -2300,6 +2318,10 @@ export const App: React.FC = () => {
                     <Server className="w-4 h-4" />
                     <span>System</span>
                 </button>
+                <button onClick={() => setActiveTab('browser')} className={`min-w-[44px] min-h-[44px] flex-1 flex flex-col items-center justify-center gap-1 py-1 rounded-lg text-[10px] font-bold transition-all ${activeTab === 'browser' ? 'text-teal-400 bg-teal-500/10' : 'text-white/40 hover:text-white'}`}>
+                    <Globe className="w-4 h-4" />
+                    <span>Web Test</span>
+                </button>
             </div>
         </div>
 
@@ -2577,6 +2599,8 @@ export const App: React.FC = () => {
                             height={showVideo ? "360px" : "120px"} 
                             controls={true}
                             playing={isPlaying}
+                            onReady={() => console.info('[Soundtrack Player] Video ready:', projectData.soundtrackUrl)}
+                            onStart={() => console.info('[Soundtrack Player] Playback started')}
                             onPlay={() => {
                                 setIsPlaying(true);
                                 if ('mediaSession' in navigator) {
@@ -2588,14 +2612,16 @@ export const App: React.FC = () => {
                                 }
                             }}
                             onPause={() => setIsPlaying(false)}
-                            onError={(e) => {
-                                console.error("ReactPlayer Error:", e);
+                            onError={(e: any) => {
+                                console.error("[Soundtrack Player] Error loading URL:", projectData.soundtrackUrl, e);
                                 addLog(`Media Player Error: Could not play the provided link. If this is a YouTube video, the creator may have disabled embedding (Error 150/153). Try using the 'Pop out player' button instead.`, 'error');
                             }}
                             config={{
                                 youtube: {
                                     playerVars: { 
-                                        origin: window.location.origin
+                                        origin: typeof window !== 'undefined' && !window.location.origin.includes('localhost') ? window.location.origin : undefined,
+                                        enablejsapi: 1,
+                                        playsinline: 1
                                     }
                                 }
                             } as any}

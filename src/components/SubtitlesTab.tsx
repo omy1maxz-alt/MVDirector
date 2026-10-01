@@ -9,6 +9,7 @@ import { ExportModal } from './ExportModal';
 import { SubtitleFormatDropdown } from './SubtitleFormatDropdown';
 import { SubtitleType } from '../types';
 import { get, set } from 'idb-keyval';
+import { normalizeYoutubeUrl } from '../services/youtube';
 
 interface SubtitlesTabProps {
     file?: File | null;
@@ -397,7 +398,15 @@ export const SubtitlesTab: React.FC<SubtitlesTabProps> = ({ file, apiKeys, apiKe
                                                     onChange={(e) => setYoutubeInput(e.target.value)}
                                                     onKeyDown={(e) => {
                                                         if (e.key === 'Enter' && youtubeInput.trim()) {
-                                                            setYoutubeUrl(youtubeInput.trim());
+                                                            const raw = youtubeInput.trim();
+                                                            console.info(`[SubtitlesTab] Enter pressed with: "${raw}"`);
+                                                            const { url: clean, videoId, isValid } = normalizeYoutubeUrl(raw);
+                                                            console.info(`[SubtitlesTab] Normalized -> "${clean}", ID: "${videoId}", valid: ${isValid}`);
+                                                            if (isValid && clean) {
+                                                                setYoutubeUrl(clean);
+                                                                setYoutubeInput(clean);
+                                                                setMediaSourceType('youtube');
+                                                            }
                                                         }
                                                     }}
                                                     placeholder="https://www.youtube.com/watch?v=... or https://youtu.be/..."
@@ -407,8 +416,14 @@ export const SubtitlesTab: React.FC<SubtitlesTabProps> = ({ file, apiKeys, apiKe
                                             <button
                                                 type="button"
                                                 onClick={() => {
-                                                    if (youtubeInput.trim()) {
-                                                        setYoutubeUrl(youtubeInput.trim());
+                                                    const raw = youtubeInput.trim();
+                                                    console.info(`[SubtitlesTab] Apply YouTube Video clicked with: "${raw}"`);
+                                                    const { url: clean, videoId, isValid } = normalizeYoutubeUrl(raw);
+                                                    console.info(`[SubtitlesTab] Normalized -> "${clean}", ID: "${videoId}", valid: ${isValid}`);
+                                                    if (isValid && clean) {
+                                                        setYoutubeUrl(clean);
+                                                        setYoutubeInput(clean);
+                                                        setMediaSourceType('youtube');
                                                     }
                                                 }}
                                                 disabled={!youtubeInput.trim()}
@@ -444,6 +459,8 @@ export const SubtitlesTab: React.FC<SubtitlesTabProps> = ({ file, apiKeys, apiKe
                                                         height="100%"
                                                         controls={true}
                                                         pip={false}
+                                                        onReady={() => console.info('[Subtitles Preview] Player ready for:', youtubeUrl)}
+                                                        onError={(err: any) => console.error('[Subtitles Preview] Error loading video:', youtubeUrl, err)}
                                                     />
                                                 </div>
                                             </div>

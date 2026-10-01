@@ -38,7 +38,25 @@ export const listenAuthState = (
   });
 };
 
+export const isNativeEnvironment = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  return (
+    !!(window as any).Capacitor ||
+    window.location.hostname === 'localhost' ||
+    window.location.protocol === 'capacitor:' ||
+    window.location.protocol === 'file:'
+  );
+};
+
 export const signInWithGoogle = async (): Promise<{ user: User; accessToken: string | null }> => {
+  if (isNativeEnvironment()) {
+    const nativeErr = new Error(
+      "Google Sign-In via Web Popup is disabled inside the Android APK WebView because Android WebViews block popup window communication ('window.opener') with Firebase Auth, and 'localhost' is not an authorized domain. All Director, Suno Music, Subtitles, and Storyboard features are 100% accessible via the Custom API Keys below without signing in!"
+    );
+    (nativeErr as any).code = 'auth/native-webview-unsupported';
+    throw nativeErr;
+  }
+
   try {
     isSigningIn = true;
     const result = await signInWithPopup(auth, googleProvider);

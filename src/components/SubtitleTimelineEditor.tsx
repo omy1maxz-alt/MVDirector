@@ -7,6 +7,7 @@ import { ExportModal } from "./ExportModal";
 import { AudioEnergyProfile, analyzeAudioFile, snapBlockToAudio, snapAllBlocksToAudio } from '../utils/audioSnap';
 import { alignSingleBlockWithGemini, alignAllSubtitlesWithGemini } from '../services/gemini_srt';
 import { syncSubtitleTranslations, fixSubtitleWithAgenticVideo, fixSubtitleWithAudio, uploadVideoToGemini, fixSubtitleWithFrame } from '../services/gemini';
+import { normalizeYoutubeUrl } from '../services/youtube';
 
 export interface SubtitleBlock {
     id: string;
@@ -228,12 +229,24 @@ export const SubtitleTimelineEditor: React.FC<SubtitleTimelineEditorProps> = ({ 
     };
 
     const handleApplyYoutubeUrl = (url: string) => {
-        const clean = url.trim();
-        setLocalYoutubeUrl(clean || null);
+        const raw = (url || '').trim();
+        console.info(`[YouTube Load] User pressed Load Video with input: "${raw}"`);
+        const { url: clean, videoId, isValid } = normalizeYoutubeUrl(raw);
+        console.info(`[YouTube Load] Parsed: clean="${clean}", videoId="${videoId}", isValid=${isValid}`);
+
+        if (!isValid || !clean) {
+            setSnapNotification("Invalid YouTube link: " + (raw || 'empty'));
+            return;
+        }
+
+        setLocalYoutubeUrl(clean);
+        setYoutubeError(false);
+        setIsPlaying(true);
         if (onYoutubeUrlChange) {
             onYoutubeUrlChange(clean);
         }
         setShowYoutubeInputModal(false);
+        setSnapNotification(videoId ? `YouTube Loaded (${videoId})` : 'Video Loaded');
     };
     const [dragHUD, setDragHUD] = useState<{
         id: string;
@@ -2079,17 +2092,19 @@ export const SubtitleTimelineEditor: React.FC<SubtitleTimelineEditorProps> = ({ 
                             height="100%"
                             controls={false}
                             onError={(err: any) => {
-                                console.warn('[Timeline] YouTube video playback failed or blocked:', err);
+                                console.error('[YouTube Player] Playback failed/blocked:', err, 'for URL:', effectiveYoutubeUrl);
                                 setYoutubeError(true);
                                 setIsPlaying(false);
                             }}
                             onReady={() => {
+                                console.info('[YouTube Player] Video ready for URL:', effectiveYoutubeUrl);
                                 setYoutubeError(false);
                                 if (mediaRef.current && typeof (mediaRef.current as any).getDuration === 'function') {
                                     const dur = (mediaRef.current as any).getDuration();
                                     if (dur && dur > 0) setDuration(dur * 1000);
                                 }
                             }}
+                            onStart={() => console.info('[YouTube Player] Video started playing')}
                             onProgress={(state: { playedSeconds: number }) => {
                                 setCurrentTime(state.playedSeconds * 1000);
                                 if (!duration || duration <= 0) {
@@ -2110,7 +2125,7 @@ export const SubtitleTimelineEditor: React.FC<SubtitleTimelineEditorProps> = ({ 
                                         modestbranding: 1,
                                         rel: 0,
                                         playsinline: 1,
-                                        origin: typeof window !== 'undefined' ? window.location.origin : undefined,
+                                        origin: typeof window !== 'undefined' && !window.location.origin.includes('localhost') ? window.location.origin : undefined,
                                         enablejsapi: 1
                                     }
                                 }

@@ -2,6 +2,40 @@
 
 ## Technical Constraints & Patterns
 
+### 112. Elimination of Leaked React DOM Event Handlers (`onBuffer`, `onBufferEnd`) on Player (`SubtitleTimelineEditor.tsx`, `App.tsx`)
+- **Problem & Root Cause:**
+  - React logged console warnings:
+    `Warning: Unknown event handler property 'onBuffer'. It will be ignored.`
+    `Warning: Unknown event handler property 'onBufferEnd'. It will be ignored.`
+  - When `react-player` falls back to its internal FilePlayer or mounts native `<video>` elements, it forwards unrecognized top-level JSX props directly to the underlying HTML5 `<video>` DOM element. Because standard HTML video elements do not have `onBuffer` or `onBufferEnd` attributes, React flags them as invalid DOM event handlers.
+- **Architectural Solution:**
+  - Removed `onBuffer` and `onBufferEnd` from `<Player />` invocations across `SubtitleTimelineEditor.tsx` and `App.tsx`.
+  - Preserved standard ReactPlayer events (`onReady`, `onStart`, `onPlay`, `onPause`, `onProgress`, `onError`, `onEnded`) which are safely filtered by ReactPlayer and native HTMLMediaElement listeners.
+
+### 111. Hacker's Keyboard Modifier Interception, YouTube URL Normalization & Web Test Tab (`keyboardSupport.ts`, `BrowserTab.tsx`, `youtube.ts`)
+- **Problem & Root Cause:**
+  1. *Hacker's Keyboard Shortcut Inaction:* In Android WebViews, virtual keyboards simulating physical PC modifier keys (Ctrl, Shift, Alt, Home, End) fail to trigger browser default actions (`Ctrl+A` select all, `Ctrl+Shift+Home/End` line range selection, `Ctrl+V` paste) inside HTML inputs and textareas because the WebView event pipe ignores synthetic accelerator commands.
+  2. *YouTube URL Load "No Response":* When pasting YouTube links from mobile clipboards, invisible zero-width spaces, mobile line breaks, or variations (`m.youtube.com`, `youtu.be/`, shorts, or bare IDs) failed raw string checks. Additionally, omitting explicit debug logs left creators unaware of URL normalization, player buffering states, or blocked DRM streams.
+  3. *Inability to Test Web/Iframe Capabilities on APK:* Without a webview testing tab, creators could not verify whether external browsing and video embedding work inside the Capacitor Android APK.
+- **Architectural Solution:**
+  1. Built `src/services/keyboardSupport.ts` with global captured keydown handlers for `Ctrl+A` (`setSelectionRange(0, length)`), `Ctrl+Shift+Home/End`, `Ctrl+Home/End`, and `Ctrl+V` fallback.
+  2. Created `normalizeYoutubeUrl()` in `src/services/youtube.ts` stripping zero-width spaces, normalizing shorts/embeds/mobile links, and adding full diagnostic logging (`[YouTube Load]`) across `SubtitleTimelineEditor.tsx`, `SubtitlesTab.tsx`, and `App.tsx`.
+  3. Created `src/components/BrowserTab.tsx` ("Web Test" tab in mobile bottom navigation) with an address bar, reload/pop-out actions, and quick presets (`YouTube Embed Test`, `YouTube Mobile`, `Wikipedia`, `Bing`, `DuckDuckGo`) logging iframe load status to the in-app Diagnostic Log Capture.
+
+### 110. Android APK Firebase Auth Handler & Standalone Mode (`auth.ts`, `ApiKeyVault.tsx`)
+- **Problem & Root Cause:**
+  - When tapping "Sign In with Google" on the Android APK, the app opened:
+    `https://gen-lang-client-0927402582.firebaseapp.com/__/auth/handler?apiKey=...&authType=signInViaPopup&redirectUrl=https%3A%2F%2Flocalhost%2F...`
+    which displayed: `"The requested action is invalid."`
+  - Two underlying causes:
+    1. *Missing `window.opener` in WebView:* `signInWithPopup` relies on standard browser multi-window popup communication (`window.opener.postMessage`). Android WebViews in Capacitor do not support popup window managers by default, opening the URL as a standalone top-level page without a parent window. When Firebase's handler script finds no `window.opener`, it immediately renders `"The requested action is invalid."`
+    2. *Unauthorized `localhost` redirect:* `redirectUrl=https://localhost/` is rejected by Firebase Auth's backend OAuth validator unless `localhost` is added to Firebase Console Authorized Domains.
+- **Architectural Solution:**
+  1. Added `isNativeEnvironment()` detector in `src/services/auth.ts`.
+  2. Prevented `signInWithGoogle` from navigating to the broken handler page when inside native Android WebView.
+  3. Replaced the generic Google sign-in button in `ApiKeyVault.tsx` with an informative "Android APK Standalone Mode" banner clarifying that no sign-in is required, and all AI generation features (Director, Suno, Subtitles, Vision) work 100% via Built-in or Custom API Keys.
+  4. Updated the top mobile header button on APK to label as "API Keys" instead of "Sign In".
+
 ### 109. Android WebView & Capacitor In-App Diagnostic Log Capture (`logCapture.ts`, `CaptureLogsModal.tsx`)
 - **Problem & Root Cause:**
   - The Android APK environment (Capacitor WebView running on `https://localhost`) behaves differently from desktop and web browsers (e.g., origin policies, restricted CORS, Web Audio lifecycle, audio codec hardware decoders, YouTube iframe blocks).

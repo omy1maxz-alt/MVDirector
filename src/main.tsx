@@ -8,10 +8,12 @@ import { KieChatStandalone } from './components/KieChatStandalone';
 import { CrashLogger } from './components/CrashLogger';
 import { initGlobalCrashLogger, recordCrash } from './services/crashLogger';
 import { initGlobalLogCapture } from './services/logCapture';
+import { initKeyboardSupport } from './services/keyboardSupport';
 
-// Initialize global diagnostic log capture and crash interceptors
+// Initialize global diagnostic log capture, keyboard shortcuts, and crash interceptors
 initGlobalLogCapture();
 initGlobalCrashLogger();
+initKeyboardSupport();
 
 // Ensure window.fetch has both getter and setter so third-party/iframe shims do not throw
 if (typeof window !== 'undefined') {
