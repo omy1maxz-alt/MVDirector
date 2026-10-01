@@ -42,7 +42,6 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
-          cache: gradle
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
@@ -97,9 +96,6 @@ jobs:
               manifest_path.write_text(content)
           PY
           fi
-
-      - name: Setup Gradle Cache
-        uses: gradle/actions/setup-gradle@v4
 
       - name: Build Android Debug APK
         working-directory: ./android
