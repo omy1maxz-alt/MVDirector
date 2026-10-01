@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Bug, Copy, Check, Trash2, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react';
+import { X, Bug, Copy, Check, Trash2, ChevronDown, ChevronUp, AlertTriangle, Terminal } from 'lucide-react';
 import {
   CrashLogEntry,
   getRecentCrashLogs,
@@ -10,9 +10,10 @@ import {
 interface CrashLogsModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onOpenCaptureLogs?: () => void;
 }
 
-export const CrashLogsModal: React.FC<CrashLogsModalProps> = ({ isOpen, onClose }) => {
+export const CrashLogsModal: React.FC<CrashLogsModalProps> = ({ isOpen, onClose, onOpenCaptureLogs }) => {
   const [logs, setLogs] = useState<CrashLogEntry[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -53,6 +54,19 @@ export const CrashLogsModal: React.FC<CrashLogsModalProps> = ({ isOpen, onClose 
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {onOpenCaptureLogs && (
+              <button
+                onClick={() => {
+                  onClose();
+                  onOpenCaptureLogs();
+                }}
+                className="flex items-center gap-1 px-2.5 py-1 text-xs text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 rounded-lg border border-amber-500/20 transition-colors"
+                title="Open live console & diagnostic logs"
+              >
+                <Terminal className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Live Logs</span>
+              </button>
+            )}
             {logs.length > 0 && (
               <button
                 onClick={handleClear}

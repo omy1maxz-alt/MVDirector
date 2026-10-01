@@ -1,4 +1,21 @@
 ### Added
+- **Android WebView Diagnostic Log Capture (`logCapture.ts`, `CaptureLogsModal.tsx`, `App.tsx`)**:
+  - Implemented comprehensive in-app log capture engine intercepting `console.log`, `console.info`, `console.warn`, `console.error`, `fetch` network requests, `window.onerror`, and `unhandledrejection`.
+  - Added full WebView & Android environment diagnostics: User Agent, app origin (`localhost` vs web), Capacitor native APK detection, physical screen & viewport resolution, touch points, CPU/RAM estimates, Web Audio API status, and storage quotas.
+  - Built a mobile-first `CaptureLogsModal` with real-time log streaming, category filtering (`All`, `Errors`, `Network`, `Warn`, `Device Info`), search filtering, expandable stack traces, and one-click "Copy For AI" to allow instant log sharing from the Android APK without needing Chrome DevTools.
+  - Added direct quick-access buttons in the top mobile header (`Terminal` icon), the Settings dropdown, the System tab, and inside `CrashLogsModal`.
+
+### Fixed
+- **Safe Video Link Playback & YouTube Error Fallback (`SubtitleTimelineEditor.tsx`)**:
+  - Unified all media control logic (`updateTime`, `togglePlay`, `seekTo`, `saveCurrentFrame`, and pointer scrub pause) to use `effectiveYoutubeUrl` instead of the stale `youtubeUrl` prop.
+  - Eliminated `TypeError: mediaRef.current.pause is not a function` when scrubbing or pausing while a video link is active by gating native DOM audio/video calls from ReactPlayer state.
+  - Added an intuitive YouTube Error Overlay (`onError`) with a direct "Open on YouTube" pop-out and "Clear Video" button when videos are blocked by YouTube copyright DRM (Error 150/153) or `localhost` origin policies.
+
+- **Resolved React DOM Unknown Event Handler Warning (`SubtitleTimelineEditor.tsx`)**:
+  - Removed the non-standard `onDuration` JSX prop from `<Player />` that leaked into underlying `<video>` DOM elements in `react-player`'s FilePlayer fallback, eliminating React's console warning `Warning: Unknown event handler property onDuration`.
+  - Replaced it with clean duration retrieval via `onReady` and `onProgress` using `mediaRef.current.getDuration()`.
+
+### Added
 - **Firebase Provisioning & Security Rules Deployment**:
   - Successfully provisioned Firebase Cloud Firestore and Authentication for project `gen-lang-client-0927402582` in region `asia-southeast1`.
   - Deployed `firestore.rules` with user-scoped isolation (`/users/{userId}/*`), validating data ownership across projects, plans, chat sessions, and knowledge graphs.

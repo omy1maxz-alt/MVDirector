@@ -23,6 +23,7 @@ import { PromptHistoryModal } from '@/components/PromptHistoryModal';
 import { InstructionPresetsModal } from '@/components/InstructionPresetsModal';
 import { GitHubConnectModal } from '@/components/GitHubConnectModal';
 import { CrashLogsModal } from '@/components/CrashLogsModal';
+import { CaptureLogsModal } from '@/components/CaptureLogsModal';
 import { AspectRatioDropdown } from '@/components/AspectRatioDropdown';
 import { GlobalCharacterDropdown } from '@/components/GlobalCharacterDropdown';
 import { StudioChat } from '@/components/StudioChat';
@@ -244,6 +245,7 @@ export const App: React.FC = () => {
   const [showDevJournal, setShowDevJournal] = useState(false);
   const [showSecondBrain, setShowSecondBrain] = useState(false);
   const [showCrashLogs, setShowCrashLogs] = useState(false);
+  const [showCaptureLogs, setShowCaptureLogs] = useState(false);
   const [showKieChat, setShowKieChat] = useState(false);
   const [showGitHubConnect, setShowGitHubConnect] = useState(false);
   const [showChatHistory, setShowChatHistory] = useState(false);
@@ -1366,6 +1368,13 @@ export const App: React.FC = () => {
                     <Bot className="w-3.5 h-3.5 text-indigo-400" />
                     <span className="hidden sm:inline">KIE Chat</span>
                 </button>
+                <button 
+                    onClick={() => setShowCaptureLogs(true)} 
+                    className="p-1.5 text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 rounded-lg transition-colors relative" 
+                    title="Capture Logs & Diagnostics (APK / WebView)"
+                >
+                    <Terminal className="w-4 h-4" />
+                </button>
                 <button onClick={() => setShowChatHistory(true)} className="p-1.5 text-white/40 hover:text-white hover:bg-white/5 rounded-lg transition-colors" title="Chat Logs"><MessageSquare className="w-4 h-4" /></button>
                 <div ref={settingsMenuRef} className="relative">
                     <button onClick={() => setIsSettingsMenuOpen(!isSettingsMenuOpen)} className="p-1.5 text-white/40 hover:text-white hover:bg-white/5 rounded-lg transition-colors" title="Settings & Info"><Settings className="w-4 h-4" /></button>
@@ -1376,6 +1385,7 @@ export const App: React.FC = () => {
                                 {isLiveSyncEnabled ? 'Live Agent: ON' : 'Live Agent: OFF'}
                             </button>
                             <div className="h-px bg-white/10 my-1" />
+                            <button onClick={() => { setShowCaptureLogs(true); setIsSettingsMenuOpen(false); }} className="w-full text-left flex items-center gap-3 px-3 py-2 text-xs text-amber-400 font-semibold hover:bg-white/5"><Terminal className="w-4 h-4 text-amber-400" /> Capture Logs</button>
                             <button onClick={() => { setShowKieChat(true); setIsSettingsMenuOpen(false); }} className="w-full text-left flex items-center gap-3 px-3 py-2 text-xs text-indigo-300 font-semibold hover:bg-white/5"><Bot className="w-4 h-4 text-indigo-400" /> KIE Chat Studio</button>
                             <button onClick={() => { setShowGitHubConnect(true); setIsSettingsMenuOpen(false); }} className="w-full text-left flex items-center gap-3 px-3 py-2 text-xs text-white/80 hover:bg-white/5"><Github className="w-4 h-4 text-white/80" /> GitHub Connect</button>
                             <button onClick={() => { setShowKeyVault(true); setIsSettingsMenuOpen(false); }} className="w-full text-left flex items-center gap-3 px-3 py-2 text-xs text-white/80 hover:bg-white/5"><Key className="w-4 h-4 text-indigo-400" /> API Settings</button>
@@ -2216,8 +2226,23 @@ export const App: React.FC = () => {
 
          {activeTab === 'system' ? (
             <div className="flex-1 min-h-0 flex flex-col w-full p-4 bg-black overflow-hidden">
+              <div className="flex items-center justify-between pb-3 mb-3 border-b border-white/10 shrink-0">
+                <div>
+                  <h2 className="text-base font-bold text-white flex items-center gap-2">
+                    <Terminal className="w-4 h-4 text-amber-400" />
+                    <span>System & Diagnostic Logs</span>
+                  </h2>
+                  <p className="text-[11px] text-white/50">Capture full console output, network requests & device specs</p>
+                </div>
+                <button
+                  onClick={() => setShowCaptureLogs(true)}
+                  className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow"
+                >
+                  <Terminal className="w-3.5 h-3.5" />
+                  <span>Open Log Capture</span>
+                </button>
+              </div>
               <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
-                <h2 className="text-lg font-bold text-white mb-4">System Logs</h2>
                 {logs.map(log => (
                   <div key={log.id} className="text-xs font-mono flex gap-2 mb-1">
                     <span className="text-white/30">[{log.timestamp}]</span>
@@ -2282,7 +2307,8 @@ export const App: React.FC = () => {
       <ChangelogModal isOpen={showChangelog} onClose={() => setShowChangelog(false)} />
       <ChatHistoryModal isOpen={showChatHistory} onClose={() => setShowChatHistory(false)} />
       <DevJournalModal isOpen={showDevJournal} onClose={() => setShowDevJournal(false)} />
-      <CrashLogsModal isOpen={showCrashLogs} onClose={() => setShowCrashLogs(false)} />
+      <CrashLogsModal isOpen={showCrashLogs} onClose={() => setShowCrashLogs(false)} onOpenCaptureLogs={() => setShowCaptureLogs(true)} />
+      <CaptureLogsModal isOpen={showCaptureLogs} onClose={() => setShowCaptureLogs(false)} />
       <SecondBrainModal isOpen={showSecondBrain} onClose={() => setShowSecondBrain(false)} />
       <KieChatModal 
         isOpen={showKieChat} 

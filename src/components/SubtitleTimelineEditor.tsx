@@ -190,6 +190,7 @@ export const SubtitleTimelineEditor: React.FC<SubtitleTimelineEditorProps> = ({ 
     const [showQualityMenu, setShowQualityMenu] = useState(false);
     const [showYoutubeInputModal, setShowYoutubeInputModal] = useState(false);
     const [youtubeInputVal, setYoutubeInputVal] = useState(youtubeUrl || '');
+    const [youtubeError, setYoutubeError] = useState(false);
 
     useEffect(() => {
         setLocalYoutubeUrl(youtubeUrl || null);
@@ -197,6 +198,10 @@ export const SubtitleTimelineEditor: React.FC<SubtitleTimelineEditorProps> = ({ 
     }, [youtubeUrl]);
 
     const effectiveYoutubeUrl = localYoutubeUrl || youtubeUrl;
+
+    useEffect(() => {
+        setYoutubeError(false);
+    }, [effectiveYoutubeUrl]);
 
     const handleSetQuality = (quality: string) => {
         setYoutubeQuality(quality);
@@ -737,8 +742,8 @@ export const SubtitleTimelineEditor: React.FC<SubtitleTimelineEditorProps> = ({ 
     }, [initialContent, updateHistoryState]);
 
     useEffect(() => {
-        if (youtubeUrl) {
-            setMediaUrl(youtubeUrl);
+        if (effectiveYoutubeUrl) {
+            setMediaUrl(effectiveYoutubeUrl);
         } else if (effectiveAudioFile) {
             const url = URL.createObjectURL(effectiveAudioFile);
             setMediaUrl(url);
@@ -746,7 +751,7 @@ export const SubtitleTimelineEditor: React.FC<SubtitleTimelineEditorProps> = ({ 
         } else {
             setMediaUrl(null);
         }
-    }, [effectiveAudioFile, youtubeUrl]);
+    }, [effectiveAudioFile, effectiveYoutubeUrl]);
 
     useEffect(() => {
         if (!timelineRef.current) return;
@@ -765,7 +770,7 @@ export const SubtitleTimelineEditor: React.FC<SubtitleTimelineEditorProps> = ({ 
     const updateTime = useCallback(() => {
         if (mediaRef.current) {
             let newTimeMs = 0;
-            if (youtubeUrl) {
+            if (effectiveYoutubeUrl) {
                 // For ReactPlayer
                 if (typeof (mediaRef.current as any).getCurrentTime === 'function') {
                     newTimeMs = (mediaRef.current as any).getCurrentTime() * 1000;
@@ -785,12 +790,12 @@ export const SubtitleTimelineEditor: React.FC<SubtitleTimelineEditorProps> = ({ 
             // Throttle session storage saves
             const now = performance.now();
             if (now - lastSavedSessionTimeRef.current > 1000) {
-                const mediaId = effectiveAudioFile?.name || youtubeUrl || 'default';
+                const mediaId = effectiveAudioFile?.name || effectiveYoutubeUrl || 'default';
                 sessionStorage.setItem(`media_time_${mediaId}`, newTimeMs.toString());
                 lastSavedSessionTimeRef.current = now;
             }
         }
-    }, [youtubeUrl, isPlaying, effectiveAudioFile]);
+    }, [effectiveYoutubeUrl, isPlaying, effectiveAudioFile]);
 
     useEffect(() => {
         if (isPlaying) {
@@ -806,7 +811,7 @@ export const SubtitleTimelineEditor: React.FC<SubtitleTimelineEditorProps> = ({ 
             setDuration(mediaRef.current.duration * 1000);
             
             // Restore playback position
-            const mediaId = effectiveAudioFile?.name || youtubeUrl || 'default';
+            const mediaId = effectiveAudioFile?.name || effectiveYoutubeUrl || 'default';
             const savedTimeStr = sessionStorage.getItem(`media_time_${mediaId}`);
             if (savedTimeStr) {
                 const timeMs = parseFloat(savedTimeStr);
@@ -845,7 +850,7 @@ export const SubtitleTimelineEditor: React.FC<SubtitleTimelineEditorProps> = ({ 
     };
 
     const togglePlay = () => {
-        if (youtubeUrl) {
+        if (effectiveYoutubeUrl) {
             setIsPlaying(prev => !prev);
             return;
         }
@@ -869,7 +874,7 @@ export const SubtitleTimelineEditor: React.FC<SubtitleTimelineEditorProps> = ({ 
         if (mediaRef.current) {
             const now = performance.now();
             if (!throttleVideo || now - lastVideoSeekRef.current > 50) { // Throttle video decoding to ~20fps during drags for super fluid preview
-                if (youtubeUrl) {
+                if (effectiveYoutubeUrl) {
                     if (typeof (mediaRef.current as any).seekTo === 'function') {
                         (mediaRef.current as any).seekTo(ms / 1000, 'seconds');
                     }
@@ -881,10 +886,10 @@ export const SubtitleTimelineEditor: React.FC<SubtitleTimelineEditorProps> = ({ 
             setCurrentTime(ms); // Always update React state instantly for smooth UI
             
             // Save to session storage on seek
-            const mediaId = effectiveAudioFile?.name || youtubeUrl || 'default';
+            const mediaId = effectiveAudioFile?.name || effectiveYoutubeUrl || 'default';
             sessionStorage.setItem(`media_time_${mediaId}`, ms.toString());
         }
-    }, [youtubeUrl, effectiveAudioFile]);
+    }, [effectiveYoutubeUrl, effectiveAudioFile]);
 
     const handlePointerMove = useCallback((e: PointerEvent) => {
         const { type, id, startX, initStart, initEnd, initialBlocks, pointerId } = dragState.current;
@@ -1251,8 +1256,10 @@ export const SubtitleTimelineEditor: React.FC<SubtitleTimelineEditorProps> = ({ 
             try { target.setPointerCapture(e.pointerId); } catch (err) {}
         }
         
-        if (mediaRef.current && !mediaRef.current.paused) {
-            mediaRef.current.pause();
+        if (effectiveYoutubeUrl) {
+            setIsPlaying(false);
+        } else if (mediaRef.current && !(mediaRef.current as HTMLMediaElement).paused) {
+            (mediaRef.current as HTMLMediaElement).pause();
             setIsPlaying(false);
         }
         
@@ -1728,12 +1735,12 @@ export const SubtitleTimelineEditor: React.FC<SubtitleTimelineEditorProps> = ({ 
             if (!apiKey) setSnapNotification("API Key required for vision fix");
             return;
         }
-        if (!mediaUrl && !youtubeUrl) {
+        if (!mediaUrl && !effectiveYoutubeUrl) {
             setSnapNotification("Vision fix requires a video");
             return;
         }
         
-        if (mode === 'frame' && youtubeUrl) {
+        if (mode === 'frame' && effectiveYoutubeUrl) {
             setSnapNotification("Frame capture is not supported for YouTube videos. Using Video mode.");
             mode = 'video';
         }
@@ -1754,8 +1761,8 @@ export const SubtitleTimelineEditor: React.FC<SubtitleTimelineEditorProps> = ({ 
             } else {
                 let fileUriToUse = '';
                 
-                if (youtubeUrl) {
-                    fileUriToUse = youtubeUrl;
+                if (effectiveYoutubeUrl) {
+                    fileUriToUse = effectiveYoutubeUrl;
                 } else if (effectiveAudioFile && effectiveAudioFile.type?.includes('video')) {
                     if (uploadedFileUri) {
                         fileUriToUse = uploadedFileUri;
@@ -1802,7 +1809,7 @@ export const SubtitleTimelineEditor: React.FC<SubtitleTimelineEditorProps> = ({ 
             if (!apiKey) setSnapNotification("API Key required for audio fix");
             return;
         }
-        if (!mediaUrl && !youtubeUrl) {
+        if (!mediaUrl && !effectiveYoutubeUrl) {
             setSnapNotification("Media required for audio fix");
             return;
         }
@@ -1811,8 +1818,8 @@ export const SubtitleTimelineEditor: React.FC<SubtitleTimelineEditorProps> = ({ 
         try {
             let fileUriToUse = '';
             
-            if (youtubeUrl) {
-                fileUriToUse = youtubeUrl;
+            if (effectiveYoutubeUrl) {
+                fileUriToUse = effectiveYoutubeUrl;
             } else if (effectiveAudioFile) {
                 if (uploadedFileUri) {
                     fileUriToUse = uploadedFileUri;
@@ -2071,17 +2078,26 @@ export const SubtitleTimelineEditor: React.FC<SubtitleTimelineEditorProps> = ({ 
                             width="100%"
                             height="100%"
                             controls={false}
+                            onError={(err: any) => {
+                                console.warn('[Timeline] YouTube video playback failed or blocked:', err);
+                                setYoutubeError(true);
+                                setIsPlaying(false);
+                            }}
                             onReady={() => {
+                                setYoutubeError(false);
                                 if (mediaRef.current && typeof (mediaRef.current as any).getDuration === 'function') {
                                     const dur = (mediaRef.current as any).getDuration();
                                     if (dur && dur > 0) setDuration(dur * 1000);
                                 }
                             }}
-                            onDuration={(d: number) => {
-                                if (d && d > 0) setDuration(d * 1000);
-                            }}
                             onProgress={(state: { playedSeconds: number }) => {
                                 setCurrentTime(state.playedSeconds * 1000);
+                                if (!duration || duration <= 0) {
+                                    if (mediaRef.current && typeof (mediaRef.current as any).getDuration === 'function') {
+                                        const dur = (mediaRef.current as any).getDuration();
+                                        if (dur && dur > 0) setDuration(dur * 1000);
+                                    }
+                                }
                             }}
                             onPlay={() => setIsPlaying(true)}
                             onPause={() => setIsPlaying(false)}
@@ -2100,6 +2116,41 @@ export const SubtitleTimelineEditor: React.FC<SubtitleTimelineEditorProps> = ({ 
                                 }
                             }}
                         />
+                        {youtubeError && (
+                            <div className="absolute inset-0 bg-black/95 flex flex-col items-center justify-center p-4 text-center z-20 space-y-3">
+                                <AlertTriangle className="w-8 h-8 text-amber-400" />
+                                <div className="space-y-1">
+                                    <p className="text-xs text-white font-bold">YouTube Embedding Unavailable</p>
+                                    <p className="text-[11px] text-white/70 max-w-xs leading-relaxed">
+                                        Playback blocked by YouTube (Error 150/153: DRM copyright protection or <code className="text-amber-300">localhost</code> origin restriction).
+                                    </p>
+                                </div>
+                                <div className="flex items-center gap-2 pt-1">
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            window.open(effectiveYoutubeUrl, '_blank');
+                                        }}
+                                        className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-bold transition-colors shadow"
+                                    >
+                                        Open on YouTube
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setLocalYoutubeUrl(null);
+                                            setYoutubeError(false);
+                                            if (onYoutubeUrlChange) onYoutubeUrlChange('');
+                                        }}
+                                        className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white/80 rounded-lg text-xs font-medium transition-colors"
+                                    >
+                                        Clear Video
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                         <div 
                             className="absolute inset-0 cursor-pointer z-[5]" 
                             onClick={togglePlay} 
@@ -3637,7 +3688,7 @@ export const SubtitleTimelineEditor: React.FC<SubtitleTimelineEditorProps> = ({ 
                                     Sync Trans
                                 </button>
                             )}
-                            {selectedBlock.text && apiKey && (youtubeUrl || (effectiveAudioFile && effectiveAudioFile.type?.includes('video'))) && (
+                            {selectedBlock.text && apiKey && (effectiveYoutubeUrl || (effectiveAudioFile && effectiveAudioFile.type?.includes('video'))) && (
                                 <>
                                 <button
                                     type="button"
@@ -3669,7 +3720,7 @@ export const SubtitleTimelineEditor: React.FC<SubtitleTimelineEditorProps> = ({ 
                                 </button>
                                 </>
                             )}
-                            {selectedBlock.text && apiKey && (youtubeUrl || effectiveAudioFile) && (
+                            {selectedBlock.text && apiKey && (effectiveYoutubeUrl || effectiveAudioFile) && (
                                 <button
                                     type="button"
                                     onClick={handleHearFix}

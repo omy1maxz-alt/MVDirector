@@ -2,6 +2,34 @@
 
 ## Technical Constraints & Patterns
 
+### 109. Android WebView & Capacitor In-App Diagnostic Log Capture (`logCapture.ts`, `CaptureLogsModal.tsx`)
+- **Problem & Root Cause:**
+  - The Android APK environment (Capacitor WebView running on `https://localhost`) behaves differently from desktop and web browsers (e.g., origin policies, restricted CORS, Web Audio lifecycle, audio codec hardware decoders, YouTube iframe blocks).
+  - On handheld mobile devices, creators cannot easily open Chrome DevTools or inspect `console.log`, `console.error`, and `fetch` failures. Previous crash logging only captured fatal unhandled crashes, leaving runtime warnings, blocked network requests, and media failures invisible.
+- **Architectural Solution:**
+  1. Built `src/services/logCapture.ts` which hooks `console.log/info/warn/error`, `window.fetch`, and error listeners into a 300-entry memory ring buffer, persisting high-priority logs to `sessionStorage`.
+  2. Implemented `getEnvironmentDiagnostics()` capturing user agent, `localhost`/Capacitor detection, screen & viewport dimensions, Web Audio API support and sample rate, and storage quota.
+  3. Created `src/components/CaptureLogsModal.tsx` with category tabs (`All`, `Errors`, `Network`, `Warn`, `Device Info`), search filtering, and a one-click "Copy Full Report For AI" button.
+  4. Added a `Terminal` button in the mobile top navigation, Settings menu, System tab, and `CrashLogsModal`.
+
+### 108. Video Link Loading, Localhost Origin & Ref Safety (`SubtitleTimelineEditor.tsx`)
+- **Problem & Root Cause:**
+  1. *Stale URL prop mismatch:* When loading a YouTube URL from the timeline modal, `localYoutubeUrl` was updated, but internal logic was checking `if (youtubeUrl)` (the prop from the parent) instead of `effectiveYoutubeUrl`. Because the prop was not yet propagated, player controls assumed the active media was an HTML5 `<video>` element.
+  2. *Ref invocation crash:* When dragging, scrubbing, or toggling playback, calling `(mediaRef.current as HTMLMediaElement).pause()` or `.play()` crashed with `TypeError: mediaRef.current.pause is not a function` because ReactPlayer controls playback via React state (`playing={isPlaying}`).
+  3. *Localhost & DRM blocks:* In native Android Capacitor builds (`https://localhost`), YouTube's embedded player API rejects playback for videos with embedding disabled (Error 150/153) and unapproved localhost origins.
+- **Architectural Solution:**
+  1. Synchronized all media playback hooks (`updateTime`, `togglePlay`, `seekTo`, `saveCurrentFrame`, and pointer down scrub pause) to use `effectiveYoutubeUrl`.
+  2. Added defensive checks distinguishing `effectiveYoutubeUrl` (state-driven playback) from native `HTMLMediaElement` DOM calls.
+  3. Implemented a user-friendly YouTube Error Overlay with a direct pop-out button ("Open on YouTube") and a "Clear Video" action.
+
+### 107. React DOM Unknown Event Handler Warning on Duration (`SubtitleTimelineEditor.tsx`)
+- **Problem & Root Cause:**
+  - React logged `Warning: Unknown event handler property %s. It will be ignored.%s onDuration at video` during subtitle timeline editing.
+  - In `SubtitleTimelineEditor.tsx`, `<Player onDuration={(d) => ...} />` passed `onDuration` to `ReactPlayer`. When `ReactPlayer`'s FilePlayer renders an HTML `<video>` element, it spreads non-filtered props onto the DOM node. HTML `<video>` has no `onDuration` event handler (standard DOM is `onDurationChange`), causing React 18/19's DOM prop validator to emit a warning.
+- **Architectural Solution:**
+  1. Removed the `onDuration` prop from `<Player />`.
+  2. Implemented duration measurement via `onReady` and `onProgress` callbacks using `mediaRef.current.getDuration()`.
+
 ### 106. Firebase Cloud Firestore & Rules Deployment (`firestore.rules`, `firebase-blueprint.json`)
 - **Problem & Requirement:**
   - Provision Firebase Firestore database and Authentication on project `gen-lang-client-0927402582` in region `asia-southeast1`.

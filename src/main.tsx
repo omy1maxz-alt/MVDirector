@@ -7,8 +7,10 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { KieChatStandalone } from './components/KieChatStandalone';
 import { CrashLogger } from './components/CrashLogger';
 import { initGlobalCrashLogger, recordCrash } from './services/crashLogger';
+import { initGlobalLogCapture } from './services/logCapture';
 
-// Initialize global exception and unhandled rejection interceptors
+// Initialize global diagnostic log capture and crash interceptors
+initGlobalLogCapture();
 initGlobalCrashLogger();
 
 // Ensure window.fetch has both getter and setter so third-party/iframe shims do not throw
