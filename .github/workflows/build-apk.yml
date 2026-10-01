@@ -33,23 +33,13 @@ jobs:
         run: |
           npm install --legacy-peer-deps
 
-      - name: Install Capacitor CLI & Android
+      - name: Install Capacitor CLI
         run: |
-          npm install -g @capacitor/cli @capacitor/android
-          npm install --save @capacitor/core @capacitor/android
+          npm install -g @capacitor/cli
 
       - name: Build Web Application
         run: |
           npm run build
-
-      - name: Initialize Capacitor Android Project
-        run: |
-          mkdir -p android
-          cd android
-          npm init -y || true
-          npx cap init mv-director-ai "MV Director AI" --web-dir=../dist || true
-          npx cap add android || true
-          npx cap sync android || true
 
       - name: Setup Java JDK 17
         uses: actions/setup-java@v4
@@ -67,6 +57,11 @@ jobs:
           export ANDROID_SDK_ROOT=/usr/lib/android-sdk
           yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT "platforms;android-34" "build-tools;34.0.0" "platform-tools" 2>&1 || true
           yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses 2>&1 || true
+
+      - name: Initialize Capacitor Android Project
+        run: |
+          npx cap add android
+          npx cap sync android
 
       - name: Configure Android Permissions
         run: |
@@ -104,13 +99,8 @@ jobs:
           ANDROID_SDK_ROOT: /usr/lib/android-sdk
         working-directory: ./android
         run: |
-          if [ -f "gradlew" ]; then
-            chmod +x gradlew
-            ./gradlew assembleDebug --no-daemon --stacktrace
-          else
-            echo "gradlew not found, trying with gradle..."
-            gradle assembleDebug --stacktrace
-          fi
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Upload Debug APK Artifact
         uses: actions/upload-artifact@v4
@@ -118,3 +108,4 @@ jobs:
           name: MV-Director-AI-Debug-APK
           path: android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: warn
+          retention-days: 30
