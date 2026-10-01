@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Subtitles, Youtube, ChevronDown, Sparkles, AlertCircle, FileText, Download, Play, Pause, Video, FileAudio, Upload, Layers, Globe, Languages, Link, Check, RefreshCw } from 'lucide-react';
+import { Subtitles, Youtube, ChevronDown, Sparkles, AlertCircle, FileText, Download, Play, Pause, Video, FileAudio, Upload, Layers, Globe, Languages, Link, Check, RefreshCw, Info } from 'lucide-react';
 import ReactPlayer from 'react-player';
 const Player = ReactPlayer as any;
 import { generateSRT } from '../services/gemini_srt';
@@ -439,18 +439,27 @@ export const SubtitlesTab: React.FC<SubtitlesTabProps> = ({ file, apiKeys, apiKe
                                                 <div className="flex items-center justify-between text-xs">
                                                     <span className="text-emerald-400 font-semibold flex items-center gap-1.5">
                                                         <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                                                        YouTube Video Linked & Ready
+                                                        YouTube Video Linked for Timeline
                                                     </span>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                            setYoutubeUrl('');
-                                                            setYoutubeInput('');
-                                                        }}
-                                                        className="text-red-400 hover:text-red-300 text-xs transition-colors"
-                                                    >
-                                                        Clear
-                                                    </button>
+                                                    <div className="flex items-center gap-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setActiveView('editor')}
+                                                            className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-md text-[11px] font-bold transition-colors shadow"
+                                                        >
+                                                            Open Timeline Editor
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setYoutubeUrl('');
+                                                                setYoutubeInput('');
+                                                            }}
+                                                            className="text-red-400 hover:text-red-300 text-xs transition-colors"
+                                                        >
+                                                            Clear
+                                                        </button>
+                                                    </div>
                                                 </div>
                                                 <div className="rounded-xl overflow-hidden border border-white/10 bg-black aspect-video max-h-56 max-w-md mx-auto shadow-xl">
                                                     <Player
@@ -463,11 +472,26 @@ export const SubtitlesTab: React.FC<SubtitlesTabProps> = ({ file, apiKeys, apiKe
                                                         onError={(err: any) => console.error('[Subtitles Preview] Error loading video:', youtubeUrl, err)}
                                                     />
                                                 </div>
+                                                <div className="p-3 bg-white/5 border border-white/10 rounded-xl space-y-1 text-left">
+                                                    <div className="text-[11px] font-bold text-white flex items-center gap-1.5">
+                                                        <Info className="w-3.5 h-3.5 text-indigo-400" />
+                                                        <span>YouTube Mode Capabilities</span>
+                                                    </div>
+                                                    <p className="text-[11px] text-white/60 leading-relaxed">
+                                                        • <strong>Timeline Editor:</strong> Full synchronized video playback, scrubbing, seek, and subtitle timing.<br/>
+                                                        • <strong>AI Audio Transcription:</strong> Requires a local audio/video file upload (YouTube encrypts raw media streams).
+                                                    </p>
+                                                </div>
                                             </div>
                                         ) : (
-                                            <p className="text-[11px] text-white/40 leading-relaxed">
-                                                Paste any public YouTube video link. Google Gemini AI will analyze the video and audio directly from YouTube to generate accurate, timestamps-aligned subtitles.
-                                            </p>
+                                            <div className="p-3 bg-white/5 border border-white/10 rounded-xl space-y-1 text-left">
+                                                <p className="text-[11px] text-white/70 leading-relaxed">
+                                                    Paste any public YouTube video link to enable <strong>synchronized video playback and subtitle scrub/editing</strong> in the Timeline Editor.
+                                                </p>
+                                                <p className="text-[10px] text-white/40">
+                                                    Note: Automated AI audio transcription requires a local audio/video file upload.
+                                                </p>
+                                            </div>
                                         )}
                                     </div>
                                 )}

@@ -989,12 +989,14 @@ export async function generateSRT(
         throw new Error("Please upload a media file or provide a YouTube URL.");
     }
 
+    if (youtubeUrl) {
+        throw new Error(
+            "AI Transcription requires a local audio or video file upload. YouTube embeds provide synchronized playback and timeline scrubbing in the Timeline Editor, but cannot be directly analyzed by the Gemini multimodal file API due to YouTube audio stream encryption. Please upload the audio/video file for AI transcription, or use the Timeline Editor to manually edit and synchronize subtitles."
+        );
+    }
+
     const keyToUse = getEffectiveGeminiApiKey(apiKey);
     const genAI = getGenAI(keyToUse);
-
-    if (youtubeUrl) {
-        return await generateSinglePassSRT(opts, true, genAI, keyToUse);
-    }
     
     let safeMimeType = audioFile ? audioFile.type : 'audio/mpeg';
     if (!safeMimeType || safeMimeType === 'application/octet-stream') {

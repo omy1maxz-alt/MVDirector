@@ -789,6 +789,12 @@ export const SubtitleTimelineEditor: React.FC<SubtitleTimelineEditorProps> = ({ 
                     newTimeMs = (mediaRef.current as any).getCurrentTime() * 1000;
                     setCurrentTime(newTimeMs);
                 }
+                if (typeof (mediaRef.current as any).getDuration === 'function') {
+                    const dur = (mediaRef.current as any).getDuration();
+                    if (dur && dur > 0 && (!duration || duration <= 0)) {
+                        setDuration(dur * 1000);
+                    }
+                }
                 requestRef.current = requestAnimationFrame(updateTime);
             } else {
                 newTimeMs = (mediaRef.current as HTMLMediaElement).currentTime * 1000;
@@ -837,6 +843,10 @@ export const SubtitleTimelineEditor: React.FC<SubtitleTimelineEditorProps> = ({ 
     };
 
     const saveCurrentFrame = async () => {
+        if (effectiveYoutubeUrl) {
+            setSnapNotification("Frame capture is only available for local video files (YouTube iframe embeds restrict canvas pixel access)");
+            return;
+        }
         if (!mediaRef.current || !effectiveAudioFile || !effectiveAudioFile.type?.includes('video')) return;
         try {
             const video = mediaRef.current as HTMLVideoElement;
@@ -886,7 +896,7 @@ export const SubtitleTimelineEditor: React.FC<SubtitleTimelineEditorProps> = ({ 
     const seekTo = useCallback((ms: number, throttleVideo: boolean = false) => {
         if (mediaRef.current) {
             const now = performance.now();
-            if (!throttleVideo || now - lastVideoSeekRef.current > 50) { // Throttle video decoding to ~20fps during drags for super fluid preview
+            if (!throttleVideo || now - lastVideoSeekRef.current > 60) { // Throttle video decoding to ~16-20fps during drags for super fluid preview
                 if (effectiveYoutubeUrl) {
                     if (typeof (mediaRef.current as any).seekTo === 'function') {
                         (mediaRef.current as any).seekTo(ms / 1000, 'seconds');
@@ -2131,6 +2141,18 @@ export const SubtitleTimelineEditor: React.FC<SubtitleTimelineEditorProps> = ({ 
                                 }
                             }}
                         />
+                        {!isPlaying && !youtubeError && (
+                            <button
+                                type="button"
+                                onClick={() => setIsPlaying(true)}
+                                className="absolute inset-0 bg-black/30 hover:bg-black/10 flex items-center justify-center group cursor-pointer z-10 transition-all"
+                                title="Tap to Play"
+                            >
+                                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-red-600/90 hover:bg-red-600 text-white flex items-center justify-center shadow-xl group-hover:scale-110 transition-transform">
+                                    <Play className="w-6 h-6 fill-white ml-0.5" />
+                                </div>
+                            </button>
+                        )}
                         {youtubeError && (
                             <div className="absolute inset-0 bg-black/95 flex flex-col items-center justify-center p-4 text-center z-20 space-y-3">
                                 <AlertTriangle className="w-8 h-8 text-amber-400" />

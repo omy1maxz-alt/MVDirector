@@ -2,6 +2,28 @@
 
 ## Technical Constraints & Patterns
 
+### 115. Dual-Mode Web Diagnostics Architecture & Resilient Caption YouTube Timeline Synchronization (`BrowserTab.tsx`, `SubtitleTimelineEditor.tsx`, `SubtitlesTab.tsx`, `gemini_srt.ts`, `environment.ts`)
+- **Problem & Architectural Distinction:**
+  1. *Web Test Tab Goal vs Mechanism Confusion:*
+     - When attempting to load `https://m.youtube.com/` in an iframe, the remote server responds with `X-Frame-Options: SAMEORIGIN` and CSP `frame-ancestors 'self'`, resulting in `net::ERR_BLOCKED_BY_RESPONSE`.
+     - The product requirement is to test whether MVDirector can provide useful web browsing inside Android without confusing an iframe sandbox limitation with general app browsing capability.
+  2. *Caption Timeline YouTube Synchronization:*
+     - YouTube video URLs loaded in the Caption tab suffered from missing `onDuration` callbacks on `<Player>`, race conditions in initial duration estimation, mobile autoplay policy blocks when triggering unmuted playback externally, and type assumptions where canvas pixel extraction (`drawImage`) attempted to access non-existent `HTMLVideoElement` DOM nodes on cross-origin iframes.
+     - Gemini API multimodal file ingestion (`fileData.fileUri`) does not accept arbitrary external YouTube URLs without file uploading.
+- **Architectural Solution:**
+  1. *Dual-Mode Web Test Tab (`BrowserTab.tsx`):*
+     - **Mode A (Embedded Test - HTML `<iframe>`):** Tests in-app iframe embedding capability. Clearly displays header warnings and explanations when remote servers enforce `X-Frame-Options: SAMEORIGIN` (e.g. YouTube portal, Google Search) vs permitted embeds (Wikipedia, DuckDuckGo, YouTube `/embed/`).
+     - **Mode B (App Browser - Top-Level Browsing Context):** Integrated `@capacitor/browser` to launch real Android Chrome Custom Tabs (or system browser windows), providing full top-level browsing with 100% JavaScript, cookies, authentication, and media playback support.
+  2. *Resilient Caption Timeline YouTube Engine (`SubtitleTimelineEditor.tsx`):*
+     - Added `onDuration` prop to `<Player>` for immediate timeline ruler sizing.
+     - Added asynchronous duration fallback via `onProgress` polling of `mediaRef.current.getDuration()`.
+     - Implemented a prominent "Tap to Play" overlay directly on the YouTube video container to satisfy Android WebView mobile user-gesture autoplay policies.
+     - Throttled scrubbing `seekTo` calls to prevent postMessage message flooding and iframe lockups during drag gestures.
+     - Added explicit guards on `saveCurrentFrame()` and `captureVideoFrame()`, preventing DOM casting errors and informing users that canvas pixel capture requires local video files.
+  3. *Clear UI & API Service Distinction (`SubtitlesTab.tsx`, `gemini_srt.ts`):*
+     - Clearly delineated capabilities in the UI: Local upload provides AI Transcription + AI Visual Frame Analysis + Local Playback; YouTube URL provides Synchronized Video Playback + Timeline Scrubbing + Subtitle Alignment and Manual/AI Editing.
+     - Protected `gemini_srt.ts` against silent `400 Bad Request` failures if external URLs are passed into `fileUri`.
+
 ### 114. Comprehensive Runtime & Platform Awareness Architecture (`environment.ts`, `ApiKeyVault.tsx`, `logCapture.ts`, `App.tsx`)
 - **Problem & Root Cause:**
   - When the app is packaged and installed as a native Android APK (Capacitor/WebView) or hosted on a standalone domain outside Google AI Studio, legacy UI labels and sandbox restrictions previously assumed the app was running inside an iframe sandbox.

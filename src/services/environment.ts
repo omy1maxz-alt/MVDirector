@@ -1,3 +1,5 @@
+import { Browser } from '@capacitor/browser';
+
 /**
  * Central Environment Detection & Platform Awareness Service.
  * 
@@ -106,25 +108,46 @@ export function detectEnvironment(): AppEnvironment {
 export const APP_ENV = detectEnvironment();
 
 /**
- * Safely opens an external URL using the optimal platform handler:
- * - Outside Google Studio: Directly uses system browser / pop-out without sandbox restrictions
+ * Safely opens a top-level web page using the optimal platform handler:
+ * - On Native Android (Capacitor): Uses Android Chrome Custom Tabs via @capacitor/browser.
+ * - On Web / Sandbox: Uses standard window.open(url, '_blank').
  */
-export function openExternalUrl(url: string, target: string = '_blank'): void {
-  if (typeof window === 'undefined') return;
+export async function openAppBrowser(url: string): Promise<{ success: boolean; mechanism: string; error?: string }> {
+  if (!url) return { success: false, mechanism: 'None', error: 'Empty URL' };
+  
+  let formattedUrl = url.trim();
+  if (!/^https?:\/\//i.test(formattedUrl)) {
+    formattedUrl = 'https://' + formattedUrl;
+  }
 
   try {
-    // When running inside Android Capacitor, Capacitor Browser can be used if registered
-    if ((window as any).Capacitor?.Plugins?.Browser?.open) {
-      (window as any).Capacitor.Plugins.Browser.open({ url });
-      return;
+    // Attempt Capacitor Browser (Android Custom Tab)
+    await Browser.open({ 
+      url: formattedUrl,
+      presentationStyle: 'popover',
+      toolbarColor: '#0a0a0a'
+    });
+    return { success: true, mechanism: 'Android Custom Tab (Chrome)' };
+  } catch (err: any) {
+    // Fallback to top-level window.open
+    try {
+      const win = window.open(formattedUrl, '_blank', 'noopener,noreferrer');
+      if (win) {
+        return { success: true, mechanism: 'System Browser Window' };
+      }
+      window.location.href = formattedUrl;
+      return { success: true, mechanism: 'Top-Level Navigation' };
+    } catch (fallbackErr: any) {
+      console.warn('[Environment] Browser navigation error:', fallbackErr);
+      return { success: false, mechanism: 'Failed', error: fallbackErr?.message || err?.message };
     }
-
-    const win = window.open(url, target, 'noopener,noreferrer');
-    if (!win) {
-      window.location.href = url;
-    }
-  } catch (err) {
-    console.warn('[Environment] window.open failed, falling back to location.href:', err);
-    window.location.href = url;
   }
 }
+
+/**
+ * Synchronous / legacy helper for simple external links.
+ */
+export function openExternalUrl(url: string, target: string = '_blank'): void {
+  openAppBrowser(url);
+}
+

@@ -1,4 +1,15 @@
 ### Added
+- **Dual-Mode Web Test Diagnostics & Android Custom Tabs (`BrowserTab.tsx`, `environment.ts`)**:
+  - Redesigned the Web Test tab with two explicit modes: **Embedded Test (HTML `<iframe>`)** for testing in-app embeddable sites and verifying `X-Frame-Options` responses, and **App Browser (Top-Level)** powered by `@capacitor/browser` (Android Chrome Custom Tabs) for browsing websites that prohibit framing (`m.youtube.com`, `www.youtube.com`, Google Search).
+  - Added comprehensive preset matrix with expected iframe vs browser behavior indicators and live mechanism reporting.
+- **Resilient YouTube Timeline Player & Playback Fallback (`SubtitleTimelineEditor.tsx`, `SubtitlesTab.tsx`)**:
+  - Wired `onDuration` on `<Player>` alongside `onProgress` polling to guarantee timeline ruler scaling for YouTube URLs.
+  - Implemented a prominent "Tap to Play" overlay directly on the YouTube video container to satisfy Android WebView user-gesture autoplay requirements.
+  - Throttled scrubbing `seekTo` operations to prevent iframe lockups during touch drags.
+  - Added safety guards preventing DOM casting errors during frame capture operations on YouTube streams.
+  - Added clear UI distinction in `SubtitlesTab.tsx` and `gemini_srt.ts` between local media capabilities (AI transcription + frame analysis) and YouTube URL capabilities (synchronized playback + timeline scrub + subtitle editing).
+
+### Added
 - **Central Environment & Platform Awareness Service (`environment.ts`, `ApiKeyVault.tsx`, `logCapture.ts`, `App.tsx`)**:
   - Implemented runtime environment detection (`APP_ENV`) distinguishing between Native Android APK (`Capacitor`/WebView), Installed PWA, Standalone Web, and Google AI Studio Preview Sandbox.
   - Updated `ApiKeyVault.tsx` and top bar actions to recognize standalone execution outside the sandbox, highlighting persistent local device storage and 100% feature availability without login requirements.
