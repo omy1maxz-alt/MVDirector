@@ -12,37 +12,46 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-      - name: Checkout Code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js 24 LTS
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "24"
           cache: npm
 
-      - name: Install Dependencies and Build Web App
+      # Use npm install temporarily because the committed lock file is invalid.
+      - name: Install web dependencies
         run: |
-          npm ci
-          npm run build
+          npm install --no-audit --no-fund
 
-      - name: Setup Capacitor Android
+      - name: Install Capacitor dependencies
         run: |
-          npm install @capacitor/core @capacitor/cli @capacitor/android
+          npm install \
+            @capacitor/core \
+            @capacitor/cli \
+            @capacitor/android \
+            --no-audit \
+            --no-fund
 
+      - name: Build web application
+        run: npm run build
+
+      - name: Add and sync Capacitor Android
+        run: |
           if [ ! -d "android" ]; then
             npx cap add android
           fi
 
           npx cap sync android
 
-      - name: Configure Android Permissions
+      - name: Configure Android permissions
         shell: bash
         run: |
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          manifest="android/app/src/main/AndroidManifest.xml"
 
-          if [ -f "$MANIFEST" ]; then
-            python3 - "$MANIFEST" <<'PY'
+          python3 - "$manifest" <<'PY'
           import sys
           from pathlib import Path
 
@@ -65,47 +74,40 @@ jobs:
                   additions.append(declaration)
 
           if additions:
-              marker = "</manifest>"
               content = content.replace(
-                  marker,
-                  "\n".join(additions) + "\n" + marker,
+                  "</manifest>",
+                  "\n".join(additions) + "\n</manifest>",
                   1,
               )
               manifest_path.write_text(content)
           PY
-          fi
 
-      - name: Setup Java JDK 21
+      - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "21"
 
-      - name: Verify Java Version
-        run: |
-          java -version
-          javac -version
-
-      - name: Setup Android SDK
+      - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: >-
+          packages: |
             platforms;android-34
             build-tools;34.0.0
             cmdline-tools;latest
 
-      - name: Accept Android SDK Licenses
+      - name: Accept Android SDK licenses
         shell: bash
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses || true
 
-      - name: Build Android Debug APK
-        working-directory: ./android
+      - name: Build debug APK
+        working-directory: android
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --stacktrace
 
-      - name: Upload Debug APK Artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: MV-Director-Android-APK
