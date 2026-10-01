@@ -40,27 +40,30 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Android SDK (Manual Install)
+      - name: Setup Android SDK
         run: |
-          # Install system Android SDK
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq android-sdk android-sdk-platform-tools android-sdk-build-tools
+          # Create local Android SDK directory
+          mkdir -p $HOME/android-sdk/licenses
+          
+          # Download and extract cmdline-tools
+          cd $HOME/android-sdk
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477027_latest.zip
+          unzip -q commandlinetools-linux-9477027_latest.zip
+          rm commandlinetools-linux-9477027_latest.zip
+          
+          # Create licenses
+          echo -e "\n24333f8a63b6825ea9c5514f83c2829b004d1fee" > $HOME/android-sdk/licenses/android-sdk-license
+          echo -e "\n84831b9409646a918e30573bab4c9c91346d8abd" > $HOME/android-sdk/licenses/android-sdk-preview-license
+          echo -e "\nd56f5187479451eabf01fb78af6dfcb131b33910" > $HOME/android-sdk/licenses/google-android-sdk-license
           
           # Set environment variables
-          echo "ANDROID_SDK_ROOT=/usr/lib/android-sdk" >> $GITHUB_ENV
-          echo "ANDROID_HOME=/usr/lib/android-sdk" >> $GITHUB_ENV
-          echo "PATH=$PATH:/usr/lib/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_ENV
-
-      - name: Accept Android SDK Licenses
-        run: |
-          mkdir -p /usr/lib/android-sdk/licenses
-          echo -e "\n24333f8a63b6825ea9c5514f83c2829b004d1fee" > /usr/lib/android-sdk/licenses/android-sdk-license
-          echo -e "\n84831b9409646a918e30573bab4c9c91346d8abd" > /usr/lib/android-sdk/licenses/android-sdk-preview-license
-          echo -e "\nd56f5187479451eabf01fb78af6dfcb131b33910" > /usr/lib/android-sdk/licenses/google-android-sdk-license
+          echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
+          echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
+          echo "$HOME/android-sdk/cmdline-tools/bin" >> $GITHUB_PATH
 
       - name: Install SDK Components
         run: |
-          sdkmanager --sdk_root=/usr/lib/android-sdk "platforms;android-34" "build-tools;34.0.0" "platform-tools" --verbose 2>&1 | head -50
+          sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools"
 
       - name: Setup Capacitor
         run: |
@@ -76,7 +79,7 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew clean
-          ./gradlew assembleDebug --no-daemon --info
+          ./gradlew assembleDebug --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
