@@ -1,116 +1,24 @@
-name: Build Android APK
-
-on:
-  push:
-    branches:
-      - main
-      - master
-  workflow_dispatch:
-
-jobs:
-  build-apk:
-    runs-on: ubuntu-24.04
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "24"
-          cache: npm
-
-      # Use npm install temporarily because the committed lock file is invalid.
-      - name: Install web dependencies
-        run: |
-          npm install --no-audit --no-fund
-
-      - name: Install Capacitor dependencies
-        run: |
-          npm install \
-            @capacitor/core \
-            @capacitor/cli \
-            @capacitor/android \
-            --no-audit \
-            --no-fund
-
-      - name: Build web application
-        run: npm run build
-
-      - name: Add and sync Capacitor Android
-        run: |
-          if [ ! -d "android" ]; then
-            npx cap add android
-          fi
-
-          npx cap sync android
-
-      - name: Configure Android permissions
-        shell: bash
-        run: |
-          manifest="android/app/src/main/AndroidManifest.xml"
-
-          python3 - "$manifest" <<'PY'
-          import sys
-          from pathlib import Path
-
-          manifest_path = Path(sys.argv[1])
-          content = manifest_path.read_text()
-
-          permissions = [
-              "android.permission.INTERNET",
-              "android.permission.RECORD_AUDIO",
-          ]
-
-          additions = []
-          for permission in permissions:
-              declaration = (
-                  f'    <uses-permission '
-                  f'android:name="{permission}" />'
-              )
-
-              if declaration not in content:
-                  additions.append(declaration)
-
-          if additions:
-              content = content.replace(
-                  "</manifest>",
-                  "\n".join(additions) + "\n</manifest>",
-                  1,
-              )
-              manifest_path.write_text(content)
-          PY
-
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "21"
-
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
-        with:
-          packages: |
-            platforms;android-34
-            build-tools;34.0.0
-            cmdline-tools;latest
 
-      - name: Accept Android SDK licenses
+      - name: Install Android SDK packages
         shell: bash
         run: |
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses || true
+          set -euo pipefail
 
-      - name: Build debug APK
-        working-directory: android
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: MV-Director-Android-APK
-          path: android/app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
-          retention-days: 14
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" \
+              -type f -name sdkmanager -print -quit)"
+          fi
+
+          test -x "$SDKMANAGER"
+
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+
+          "$SDKMANAGER" --install \
+            "platforms;android-34" \
+            "build-tools;34.0.0"
+
+          "$SDKMANAGER" --update
