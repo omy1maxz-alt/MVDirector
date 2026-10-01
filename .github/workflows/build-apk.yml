@@ -59,12 +59,23 @@ jobs:
           echo "Accepting licenses..."
           yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses 2>&1 || true
 
-      - name: Initialize & Sync Capacitor Android
+      - name: Check for Android Directory
         run: |
           if [ ! -d "android" ]; then
-            npm exec -- cap add android || echo "Capacitor add failed, continuing..."
+            echo "❌ android/ directory not found!"
+            echo "You need to initialize Capacitor Android locally and commit it:"
+            echo "  1. Run: npx cap add android"
+            echo "  2. Run: npx cap sync android"
+            echo "  3. Commit the android/ folder to your repository"
+            exit 1
+          else
+            echo "✅ android/ directory found"
+            ls -la android/
           fi
-          npm exec -- cap sync android || echo "Capacitor sync failed, continuing..."
+
+      - name: Sync Capacitor Android
+        run: |
+          npm exec -- cap sync android || true
 
       - name: Configure Android Permissions & Features
         shell: bash
