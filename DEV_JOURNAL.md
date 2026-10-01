@@ -2,6 +2,45 @@
 
 ## Technical Constraints & Patterns
 
+### 105. Mobile Android WebView Paste Drop & Capacitor Firebase Auth (`index.css`, `App.tsx`, `auth.ts`)
+- **Problem & Root Cause:**
+  1. *Pasted text disappearing on phone:* Global `-webkit-user-select: none` on `html, body` broke Android WebView's native clipboard context menu (Paste/Select All) and cancelled IME input animations on MIUI/HyperOS devices. Furthermore, when users switched away to copy lyrics from another app, Android backgrounded or restarted the WebView Activity without flushing debounced auto-save timers, causing newly pasted text to be wiped by asynchronous DB reloads.
+  2. *Login failure on APK (`auth/unauthorized-domain`):* Capacitor serves the native Android app at `https://localhost`. Firebase Authentication blocks OAuth popups unless `localhost` is explicitly registered in Firebase Console -> Authentication -> Settings -> Authorized Domains.
+- **Architectural Solution:**
+  1. Removed `user-select: none` from `html, body` and explicitly applied `user-select: text !important` to inputs and textareas.
+  2. Added dedicated `onPaste` handlers with synchronous state updates and mirror persistence to `localStorage` (`mv_latest_lyrics`).
+  3. Added `visibilitychange` (`document.visibilityState === 'hidden'`), `pagehide`, and `beforeunload` listeners to immediately save project data without waiting for the 500ms debounce when switching apps on mobile.
+  4. Persisted Music tab inputs (`coverPrompt`, `coverTitle`, `coverStyle`, `coverModel`, `coverPersonaId`) in `localStorage` across Activity destroys.
+  5. Caught `auth/unauthorized-domain` in `auth.ts`, providing a helpful instruction and clarifying to users that Google sign-in is optional (they can use custom API keys directly).
+
+### 104. Suno V6 Suite, Voice Persona & Multi-Endpoint Architecture (`kie.ts`, `App.tsx`)
+- **Problem & Root Cause:**
+  - Old Suno voice documentation endpoints (`suno-voice-generate.md` on kie.ai) were deprecated or returned 404, and music generation previously lacked Suno V6 suite models, Voice Persona cloning, and cover art generation.
+- **Architectural Solution:**
+  1. Updated `kie.ts` to implement dual task creation: standard `/api/v1/generate/music` and modern `/api/v1/jobs/createTask` (`ai-music-api/generate-music` & `ai-music-api/cover-generate`).
+  2. Added full support for the **Suno V6 family**: `V6` (Flagship SOTA), `V6_WILD` (Expressive/Experimental), and `V6_MINI` (Turbo), alongside `V5_5`, `V5`, `V4`, and `V3_5`.
+  3. Integrated **Voice Persona cloning** via `personaId` parameter to allow custom singer identities.
+  4. Added `generateSunoCoverArt` for one-click visual album artwork generation from task IDs.
+  5. Added an **Instrumental** toggle enabling pure instrumental composition without vocal/lyrics requirement.
+  6. Enabled direct **Original Music generation** when no audio URL is loaded, and **AI Song Cover mode** when a public audio URL is provided.
+
+### 103. Mobile-Only Architecture & Viewport Lock (`App.tsx`, `index.css`)
+- **Problem & Requirement:**
+  - The application is engineered strictly for handheld Android smartphones with touch ergonomics. Desktop-specific tab headers and layout splits were unnecessary and caused layout bifurcation.
+- **Architectural Solution:**
+  1. Removed the desktop header navigation bar entirely in favor of a universal, thumb-reachable bottom navigation bar (`.safe-bottom-nav`).
+  2. Removed `md:pb-0` from `<main>` to maintain safe bottom nav spacing uniformly.
+  3. Integrated universal keyboard collapse on `.safe-bottom-nav` when typing on Android virtual keyboards.
+
+### 102. Standardized GitHub Actions APK Build Workflow (`.github/workflows/build-apk.yml`)
+- **Problem & Requirement:**
+  - Automated cloud APK building on GitHub Actions required a verified, reliable YAML workflow matching Capacitor 6/7 standards with JDK 17, Android SDK 34, and Gradle build caching.
+- **Architectural Solution:**
+  1. Updated `.github/workflows/build-apk.yml` to target `ubuntu-latest` with Node.js 20, Java Temurin JDK 17, and Android SDK Build Tools 34.0.0.
+  2. Integrated `gradle/actions/setup-gradle@v4` for fast Gradle daemon caching and dependency resolution.
+  3. Added automatic XML permission injection for `INTERNET`, `ACCESS_NETWORK_STATE`, `RECORD_AUDIO`, `MODIFY_AUDIO_SETTINGS`, and `WAKE_LOCK`.
+  4. Configured `actions/upload-artifact@v4` to output `MV-Director-AI-Debug-APK`.
+
 ### 101. VitePWA devOptions and ServiceWorker Registration Guard (`vite.config.ts`, `public/sw.js`, `main.tsx`)
 - **Problem & Root Cause:**
   - In the container development server environment, setting `devOptions.enabled: true` caused `vite-plugin-pwa` to inject `/dev-sw.js?dev-sw`. Dynamic runtime transformation on the dev proxy failed with HTTP 500, triggering an unhandled rejection in the client.

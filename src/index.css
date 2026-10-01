@@ -20,14 +20,17 @@ html, body {
     overscroll-behavior: none;
     -webkit-overflow-scrolling: touch;
     -webkit-tap-highlight-color: transparent;
-    user-select: none;
-    -webkit-user-select: none;
 }
 
-/* Allow text selection specifically inside text inputs, textareas, and code editors */
+/* Ensure text inputs and textareas have full native clipboard and touch interaction */
 input, textarea, [contenteditable="true"], pre, code {
-    user-select: text;
-    -webkit-user-select: text;
+    user-select: text !important;
+    -webkit-user-select: text !important;
+}
+
+.no-select, button, nav {
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 #root {
@@ -40,7 +43,7 @@ input, textarea, [contenteditable="true"], pre, code {
 }
 
 /* Virtual Keyboard Adaptation for Android APK */
-body.keyboard-open .md\:hidden.fixed.bottom-0 {
+body.keyboard-open .safe-bottom-nav {
     display: none !important;
 }
 

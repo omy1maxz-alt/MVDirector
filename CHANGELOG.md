@@ -1,4 +1,32 @@
 ### Fixed
+- **Mobile Clipboard Paste & State Persistence (`index.css`, `App.tsx`)**:
+  - Removed global `-webkit-user-select: none` from `html, body` which previously blocked Android WebView native clipboard context menu (Paste/Select All) and cancelled IME input animations on MIUI/HyperOS devices.
+  - Added dedicated `onPaste` handlers with synchronous state and `localStorage` mirror (`mv_latest_lyrics`) to prevent pasted text from disappearing.
+  - Added immediate `visibilitychange` (`hidden`), `pagehide`, and `beforeunload` auto-save listeners so switching apps on mobile to copy lyrics flushes unsaved text to IndexedDB without relying on debounced timers.
+  - Persisted Music Tab states (`coverPrompt`, `coverTitle`, `coverStyle`, `coverModel`, `coverPersonaId`) to `localStorage` so background activity pause/destroy does not reset inputs.
+
+- **Android Capacitor Firebase Auth Domain Handling (`auth.ts`, `youtube.ts`, `ApiKeyVault.tsx`)**:
+  - Intercepted `auth/unauthorized-domain` error thrown by Firebase Authentication when running under Capacitor's `https://localhost` origin.
+  - Displayed actionable resolution instructions in the UI and informed creators that Google sign-in is optional, allowing immediate use of all Director and Suno features via Custom API Keys.
+  - Integrated the complete **Suno V6 family**: `Suno V6.0 Flagship` (SOTA multi-genre fidelity), `Suno V6 Wild` (exploratory, experimental styles), and `Suno V6 Mini` (turbo generation), alongside `V5.5`, `V5`, `V4`, and `V3.5`.
+  - Added **Suno Voice Persona / Clone integration**: Creators can input custom Voice / Persona IDs (`personaId`) to maintain vocal consistency and produce songs with specific cloned singers.
+  - Added **AI Album Cover Art Generator (`ai-music-api/cover-generate`)**: One-click generation of personalized album artwork from Suno task IDs, with direct download and "Add to References" integration.
+  - Streamlined mobile music creation controls: Model Engine, Track Type (Vocal/Instrumental), Title, Lyrics/Prompt, Negative Tags, Vocal Gender, Style Weight, Audio Weight, and Weirdness Constraint.
+
+### Added
+- **Enforced Strict Mobile-Only Architecture (`App.tsx`, `index.css`)**:
+  - Removed desktop header tab bar to make the application strictly handheld mobile-first.
+  - Made the bottom navigation bar universal across all viewports with thumb-friendly touch targets.
+  - Locked viewport bounds and maintained safe-area bottom padding (`safe-bottom-nav`) across all tabs.
+  - Configured virtual keyboard auto-collapse on `.safe-bottom-nav` when typing in Android textareas.
+
+### Added
+- **Optimized GitHub Actions Capacitor Android APK Build Pipeline (`.github/workflows/build-apk.yml`, `package.json`)**:
+  - Configured standardized GitHub Actions workflow for Capacitor Android APK compilation with `ubuntu-latest`, Node.js 20, Java Temurin JDK 17, and Android SDK Platform 34.
+  - Added Gradle caching via `gradle/actions/setup-gradle@v4` and automatic permission patching for `INTERNET`, `ACCESS_NETWORK_STATE`, `RECORD_AUDIO`, and `WAKE_LOCK`.
+  - Configured automatic artifact generation with 30-day retention for `MV-Director-AI-Debug-APK`.
+
+### Fixed
 - **Resolved ServiceWorker 500 Registration Error in Dev Environment (`vite.config.ts`, `public/sw.js`, `main.tsx`)**:
   - Disabled `devOptions` in `VitePWA` to prevent the development server from attempting on-the-fly dynamic compilation of `/dev-sw.js?dev-sw`.
   - Added standalone `public/sw.js` with direct Cache API integration for clean, zero-error service worker caching in production and preview modes.

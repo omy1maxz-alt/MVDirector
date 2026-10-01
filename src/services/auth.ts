@@ -48,6 +48,11 @@ export const signInWithGoogle = async (): Promise<{ user: User; accessToken: str
   } catch (error: any) {
     if (error?.code === 'auth/popup-closed-by-user') {
       console.warn('Sign-in popup closed by user');
+    } else if (error?.code === 'auth/unauthorized-domain') {
+      const customErr = new Error("Firebase Domain Unauthorized: 'localhost' is not in the Firebase Authorized Domains list. On Android APK, please add 'localhost' in Firebase Console (Authentication -> Settings -> Authorized Domains). You can also use all Director & Music features with your custom API keys without signing in.");
+      (customErr as any).code = 'auth/unauthorized-domain';
+      console.warn('Google Sign-in unauthorized domain:', customErr.message);
+      throw customErr;
     } else {
       console.error('Google Sign-in error:', error);
     }

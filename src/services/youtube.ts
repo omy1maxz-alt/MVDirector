@@ -44,6 +44,11 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
   } catch (error: any) {
     if (error?.code === 'auth/popup-closed-by-user') {
       console.warn('Sign in cancelled by user');
+    } else if (error?.code === 'auth/unauthorized-domain') {
+      const customErr = new Error("Firebase Domain Unauthorized: 'localhost' is not in the Firebase Authorized Domains list. Please add 'localhost' in Firebase Console (Authentication -> Settings -> Authorized Domains).");
+      (customErr as any).code = 'auth/unauthorized-domain';
+      console.warn('YouTube Sign-in unauthorized domain:', customErr.message);
+      throw customErr;
     } else if (error?.message && error.message.includes('Database is closing/hidden')) {
       console.warn('Firebase IDB connection interrupted. This is a known Safari/mobile issue during popups. Please try again.');
     } else {

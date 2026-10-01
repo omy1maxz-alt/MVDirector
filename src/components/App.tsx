@@ -4,7 +4,7 @@ import { ArtStylePresetsModal } from '@/components/ArtStylePresetsModal';
 import { YouTubeImportModal } from '@/components/YouTubeImportModal';
 import { ProjectData, DirectorPlan, Scene, LogEntry, ApiKeys, AspectRatio, CharacterProfile, ReferenceImage, ExportedProject, ApiKeySource, AppSettings, InstructionPreset, ArtStylePreset } from '@/types';
 import { createDirectorPlan, continueDirectorPlan, generateSceneImage, enhanceAndSanitizePrompt, enhanceMotionPrompt, extractCharacterDNA, generateCharacterDNAFromText, autoStyleCharacterDNA, setTextModel as setTextModelInService, setImageModel as setImageModelInService, setCustomOpenAISettings, setKieSettings, changeReferenceBackground } from '@/services/gemini';
-import { generateSunoCover, checkSunoTaskStatus } from '@/services/kie';
+import { generateSunoCover, checkSunoTaskStatus, generateSunoCoverArt } from '@/services/kie';
 import { saveProjectToDB, loadProjectFromDB, savePlanToDB, loadPlanFromDB, clearDB } from '@/services/db';
 import { SceneCard } from '@/components/SceneCard';
 import { PromptGenerator } from '@/components/PromptGenerator';
@@ -250,9 +250,25 @@ export const App: React.FC = () => {
   const [showPromptGuide, setShowPromptGuide] = useState(false);
   const [showSeedanceModal, setShowSeedanceModal] = useState(false);
   
-  const [coverPrompt, setCoverPrompt] = useState<string>('');
-  const [coverStyle, setCoverStyle] = useState<string>('');
-  const [coverTitle, setCoverTitle] = useState<string>('');
+  const [coverPrompt, setCoverPrompt] = useState<string>(() => {
+    try { return localStorage.getItem('suno_cover_prompt') || ''; } catch { return ''; }
+  });
+  const [coverStyle, setCoverStyle] = useState<string>(() => {
+    try { return localStorage.getItem('suno_cover_style') || ''; } catch { return ''; }
+  });
+  const [coverTitle, setCoverTitle] = useState<string>(() => {
+    try { return localStorage.getItem('suno_cover_title') || ''; } catch { return ''; }
+  });
+  const [coverModel, setCoverModel] = useState<'V6' | 'V6_WILD' | 'V6_MINI' | 'V5_5' | 'V5' | 'V4' | 'V3_5'>(() => {
+    try { return (localStorage.getItem('suno_cover_model') as any) || 'V6'; } catch { return 'V6'; }
+  });
+  const [coverPersonaId, setCoverPersonaId] = useState<string>(() => {
+    try { return localStorage.getItem('suno_cover_persona') || ''; } catch { return ''; }
+  });
+  const [showPersonaSettings, setShowPersonaSettings] = useState<boolean>(false);
+  const [isGeneratingCoverArt, setIsGeneratingCoverArt] = useState<boolean>(false);
+  const [generatedCoverArtUrls, setGeneratedCoverArtUrls] = useState<string[]>([]);
+  const [coverInstrumental, setCoverInstrumental] = useState<boolean>(false);
   const [coverNegativeTags, setCoverNegativeTags] = useState<string>('');
   const [coverVocalGender, setCoverVocalGender] = useState<'m' | 'f' | ''>('');
   const [coverStyleWeight, setCoverStyleWeight] = useState<number>(0.6);
@@ -263,6 +279,22 @@ export const App: React.FC = () => {
   const [isCovering, setIsCovering] = useState<boolean>(false);
   const [recoverTaskId, setRecoverTaskId] = useState<string>('');
   const [isRecoveringTaskId, setIsRecoveringTaskId] = useState<boolean>(false);
+  useEffect(() => {
+    try { localStorage.setItem('suno_cover_prompt', coverPrompt); } catch {}
+  }, [coverPrompt]);
+  useEffect(() => {
+    try { localStorage.setItem('suno_cover_style', coverStyle); } catch {}
+  }, [coverStyle]);
+  useEffect(() => {
+    try { localStorage.setItem('suno_cover_title', coverTitle); } catch {}
+  }, [coverTitle]);
+  useEffect(() => {
+    try { localStorage.setItem('suno_cover_model', coverModel); } catch {}
+  }, [coverModel]);
+  useEffect(() => {
+    try { localStorage.setItem('suno_cover_persona', coverPersonaId); } catch {}
+  }, [coverPersonaId]);
+
 
   const [newCharName, setNewCharName] = useState('');
   const [newCharDna, setNewCharDna] = useState(EMPTY_DNA);
@@ -475,7 +507,17 @@ export const App: React.FC = () => {
               }
             }
           }
-          setProjectData(sanitizedProject);
+          // Safeguard: If user already pasted or typed lyrics during initial mount, preserve it!
+          const fallbackLyrics = localStorage.getItem('mv_latest_lyrics') || '';
+          if (!sanitizedProject.lyrics && fallbackLyrics) {
+            sanitizedProject.lyrics = fallbackLyrics;
+          }
+          setProjectData(current => {
+            if (current.lyrics && current.lyrics.trim() && !sanitizedProject.lyrics) {
+              return { ...sanitizedProject, lyrics: current.lyrics };
+            }
+            return sanitizedProject;
+          });
           setLocalSoundtrackUrl(sanitizedProject.soundtrackUrl || '');
           const matchingPreset = initialArtStyles.find(p => p.prompt === sanitizedProject.artStyle);
           if (matchingPreset) setSelectedArtStyle(matchingPreset.label);
@@ -546,7 +588,31 @@ export const App: React.FC = () => {
         console.warn('Auto-save notice:', err);
       });
     }, 500);
-    return () => clearTimeout(handler);
+
+    // Immediate save on app pause, backgrounding, tab switch, or pagehide (prevents data loss when switching apps on mobile)
+    const handleImmediateSave = () => {
+      saveProjectToDB(projectData).catch(() => {});
+      try {
+        if (projectData.lyrics) localStorage.setItem('mv_latest_lyrics', projectData.lyrics);
+      } catch {}
+    };
+
+    const handleVisChange = () => {
+      if (document.visibilityState === 'hidden') {
+        handleImmediateSave();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisChange);
+    window.addEventListener('pagehide', handleImmediateSave);
+    window.addEventListener('beforeunload', handleImmediateSave);
+
+    return () => {
+      clearTimeout(handler);
+      document.removeEventListener('visibilitychange', handleVisChange);
+      window.removeEventListener('pagehide', handleImmediateSave);
+      window.removeEventListener('beforeunload', handleImmediateSave);
+    };
   }, [projectData]);
 
   
@@ -1245,17 +1311,7 @@ export const App: React.FC = () => {
       <header className="safe-top-bar border-b border-white/10 bg-black flex items-center justify-between px-3 md:px-5 shrink-0 z-50 pl-safe pr-safe">
         <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-600/20"><Clapperboard className="w-4 h-4 text-white" /></div>
-            <h1 className="text-base md:text-lg font-bold tracking-tight text-white flex items-center gap-2 font-bebas">MV DIRECTOR <span className="hidden md:inline-flex text-[9px] px-1.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 font-sans font-bold">AI STUDIO</span></h1>
-        </div>
-        <div className="hidden md:flex items-center gap-0.5 bg-white/5 p-0.5 rounded-lg border border-white/5">
-             <button onClick={() => setActiveTab('director')} className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${activeTab === 'director' ? 'bg-indigo-600 text-white shadow-md' : 'text-white/40 hover:text-white hover:bg-white/5'}`}><LayoutGrid className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Director</span></button>
-             <button onClick={() => setActiveTab('storyboard')} className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${activeTab === 'storyboard' ? 'bg-indigo-600 text-white shadow-md' : 'text-white/40 hover:text-white hover:bg-white/5'}`}><Film className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Storyboard</span></button>
-             <button onClick={() => setActiveTab('studio')} className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${activeTab === 'studio' ? 'bg-indigo-600 text-white shadow-md' : 'text-white/40 hover:text-white hover:bg-white/5'}`}><MessageSquare className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Studio</span></button>
-             <button onClick={() => setActiveTab('lab')} className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${activeTab === 'lab' ? 'bg-indigo-600 text-white shadow-md' : 'text-white/40 hover:text-white hover:bg-white/5'}`}><Sparkles className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Lab</span></button>
-             <button onClick={() => setActiveTab('subtitles')} className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${activeTab === 'subtitles' ? 'bg-blue-600 text-white shadow-md' : 'text-white/40 hover:text-white hover:bg-white/5'}`}><Subtitles className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Captions</span></button>
-             <button onClick={() => setActiveTab('music')} className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${activeTab === 'music' ? 'bg-pink-600 text-white shadow-md' : 'text-white/40 hover:text-white hover:bg-white/5'}`}><Music className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Music</span></button>
-             <button onClick={() => setActiveTab('xplore')} className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${activeTab === 'xplore' ? 'bg-cyan-600 text-white shadow-md' : 'text-white/40 hover:text-white hover:bg-white/5'}`}><FolderOpen className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Xplore</span></button>
-             <button onClick={() => setActiveTab('system')} className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${activeTab === 'system' ? 'bg-amber-600 text-white shadow-md' : 'text-white/40 hover:text-white hover:bg-white/5'}`}><Server className="w-3.5 h-3.5" /> <span className="hidden sm:inline">System</span></button>
+            <h1 className="text-base md:text-lg font-bold tracking-tight text-white flex items-center gap-2 font-bebas">MV DIRECTOR <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 font-sans font-bold">MOBILE AI</span></h1>
         </div>
         <div className="flex items-center gap-1.5">
             <div ref={projectMenuRef} className="relative">
@@ -1335,7 +1391,7 @@ export const App: React.FC = () => {
         </div>
       </header>
 
-      <main className="flex-1 min-h-0 flex flex-col overflow-hidden relative pb-[calc(4.5rem+max(env(safe-area-inset-bottom,0px),0.5rem))] md:pb-0">
+      <main className="flex-1 min-h-0 flex flex-col overflow-hidden relative pb-[calc(4.5rem+max(env(safe-area-inset-bottom,0px),0.5rem))]">
           {activeTab === 'director' ? (
             <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
               <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar bg-[#0a0a0a] animate-in fade-in duration-300">
@@ -1368,8 +1424,25 @@ export const App: React.FC = () => {
                           <div className="space-y-3">
                             <textarea 
                               value={projectData.lyrics} 
-                              onBlur={(e) => saveToHistory('lyrics', e.target.value)} 
-                              onChange={(e) => setProjectData({...projectData, lyrics: e.target.value})} 
+                              onBlur={(e) => {
+                                saveToHistory('lyrics', e.target.value);
+                                try { localStorage.setItem('mv_latest_lyrics', e.target.value); } catch {}
+                              }} 
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setProjectData(prev => ({ ...prev, lyrics: val }));
+                                try { localStorage.setItem('mv_latest_lyrics', val); } catch {}
+                              }}
+                              onPaste={(e) => {
+                                const pastedText = e.clipboardData?.getData('text');
+                                if (pastedText) {
+                                  setTimeout(() => {
+                                    const currentVal = (e.target as HTMLTextAreaElement).value;
+                                    setProjectData(prev => ({ ...prev, lyrics: currentVal }));
+                                    try { localStorage.setItem('mv_latest_lyrics', currentVal); } catch {}
+                                  }, 10);
+                                }
+                              }}
                               className="w-full h-48 bg-black border border-white/10 rounded-xl p-4 text-sm text-white/80 focus:border-indigo-500 outline-none resize-none custom-scrollbar" 
                               placeholder="Paste lyrics, poem, or story here..." 
                             />
@@ -1877,116 +1950,182 @@ export const App: React.FC = () => {
                          </div>
 
                          <div className="pt-6 border-t border-white/10 space-y-4">
-                             <div>
-                                 <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                                     <Wand2 className="w-4 h-4 text-pink-400" /> AI Song Cover (Suno AI)
-                                 </h3>
-                                 <p className="text-xs text-white/50 mt-1">Upload a public audio URL and generate an AI cover of the melody with new lyrics and style.</p>
-                             </div>
-                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                 <div className="space-y-1">
-                                     <label className="text-[10px] font-bold text-white/60 uppercase">Title</label>
-                                     <input type="text" value={coverTitle} onChange={(e) => setCoverTitle(e.target.value)} placeholder="e.g. Neon Dreams" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs outline-none focus:border-pink-500 text-white" />
+                              <div>
+                                  <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                                      <Wand2 className="w-4 h-4 text-pink-400" /> AI Music & Cover Studio (Suno AI)
+                                  </h3>
+                                  <p className="text-xs text-white/50 mt-1">Generate original AI soundtrack songs from lyrics, or create AI covers of existing songs.</p>
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                  <div className="space-y-1">
+                                      <label className="text-[10px] font-bold text-white/60 uppercase">Model Engine</label>
+                                      <select 
+                                          value={coverModel} 
+                                          onChange={(e) => setCoverModel(e.target.value as any)} 
+                                          className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs outline-none focus:border-pink-500 text-white"
+                                      >
+                                          <option value="V6">Suno V6.0 Flagship (Latest SOTA - Multi-Genre)</option>
+                                          <option value="V6_WILD">Suno V6 Wild (Experimental & Expressive)</option>
+                                          <option value="V6_MINI">Suno V6 Mini (Turbo Fast)</option>
+                                          <option value="V5_5">Suno V5.5 Pro</option>
+                                          <option value="V5">Suno V5</option>
+                                          <option value="V4">Suno V4 (Classic)</option>
+                                          <option value="V3_5">Suno V3.5</option>
+                                      </select>
+                                  </div>
+                                  <div className="space-y-1">
+                                      <label className="text-[10px] font-bold text-white/60 uppercase">Track Type</label>
+                                      <button 
+                                          type="button"
+                                          onClick={() => setCoverInstrumental(!coverInstrumental)}
+                                          className={`w-full flex items-center justify-between px-3 py-2 border rounded-xl text-xs font-semibold transition-all ${coverInstrumental ? "bg-pink-500/20 border-pink-500/50 text-pink-300" : "bg-black/40 border-white/10 text-white/70"}`}
+                                      >
+                                          <span>{coverInstrumental ? "Instrumental (No Vocals)" : "Vocal Track (With Lyrics)"}</span>
+                                          <span className="text-[10px] uppercase font-bold text-pink-400">{coverInstrumental ? "ON" : "OFF"}</span>
+                                      </button>
+                                  </div>
+                              </div>
+
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  <div className="space-y-1">
+                                      <label className="text-[10px] font-bold text-white/60 uppercase">Title</label>
+                                      <input type="text" value={coverTitle} onChange={(e) => setCoverTitle(e.target.value)} placeholder="e.g. Neon Dreams" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs outline-none focus:border-pink-500 text-white" />
+                                  </div>
+                                  <div className="space-y-1">
+                                      <label className="text-[10px] font-bold text-white/60 uppercase">Style</label>
+                                      <input type="text" value={coverStyle} onChange={(e) => setCoverStyle(e.target.value)} placeholder="e.g. Synthwave, Female Vocals" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs outline-none focus:border-pink-500 text-white" />
+                                  </div>
+                              </div>
+                              <div className="space-y-1">
+                                  <label className="text-[10px] font-bold text-white/60 uppercase">
+                                      {coverInstrumental ? "Style Prompt & Instrumentation" : "Lyrics / Prompt (Required)"}
+                                  </label>
+                                  <textarea 
+                                      value={coverPrompt} 
+                                      onChange={(e) => setCoverPrompt(e.target.value)} 
+                                      rows={3} 
+                                      placeholder={coverInstrumental ? "Describe instruments, tempo, and mood..." : "Enter your custom lyrics here..."} 
+                                      className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs outline-none focus:border-pink-500 text-white custom-scrollbar resize-none"
+                                  />
+                              </div>
+
+                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                 <div className="space-y-1 lg:col-span-3">
+                                      <label className="text-[10px] font-bold text-white/60 uppercase">Negative Tags</label>
+                                      <input type="text" value={coverNegativeTags} onChange={(e) => setCoverNegativeTags(e.target.value)} placeholder="e.g. heavy metal, male vocal" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs outline-none focus:border-pink-500 text-white" />
                                  </div>
                                  <div className="space-y-1">
-                                     <label className="text-[10px] font-bold text-white/60 uppercase">Style</label>
-                                     <input type="text" value={coverStyle} onChange={(e) => setCoverStyle(e.target.value)} placeholder="e.g. Synthwave, Female Vocals" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs outline-none focus:border-pink-500 text-white" />
+                                      <label className="text-[10px] font-bold text-white/60 uppercase">Vocal Gender</label>
+                                      <select value={coverVocalGender} onChange={(e) => setCoverVocalGender(e.target.value as any)} disabled={coverInstrumental} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs outline-none focus:border-pink-500 text-white disabled:opacity-40">
+                                          <option value="">Not Specified</option>
+                                          <option value="m">Male (m)</option>
+                                          <option value="f">Female (f)</option>
+                                      </select>
                                  </div>
-                             </div>
-                             <div className="space-y-1">
-                                 <label className="text-[10px] font-bold text-white/60 uppercase">Lyrics / Prompt (Required)</label>
-                                 <textarea value={coverPrompt} onChange={(e) => setCoverPrompt(e.target.value)} rows={3} placeholder="Enter your custom lyrics here..." className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs outline-none focus:border-pink-500 text-white custom-scrollbar resize-none"></textarea>
-                             </div>
+                              </div>
 
-                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                                <div className="space-y-1 lg:col-span-3">
-                                     <label className="text-[10px] font-bold text-white/60 uppercase">Negative Tags</label>
-                                     <input type="text" value={coverNegativeTags} onChange={(e) => setCoverNegativeTags(e.target.value)} placeholder="e.g. heavy metal, male vocal" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs outline-none focus:border-pink-500 text-white" />
-                                </div>
-                                <div className="space-y-1">
-                                     <label className="text-[10px] font-bold text-white/60 uppercase">Vocal Gender</label>
-                                     <select value={coverVocalGender} onChange={(e) => setCoverVocalGender(e.target.value as ''|'m'|'f')} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs outline-none focus:border-pink-500 text-white">
-                                         <option value="">Not Specified</option>
-                                         <option value="m">Male (m)</option>
-                                         <option value="f">Female (f)</option>
-                                     </select>
-                                </div>
-                             </div>
+                              <div className="bg-white/5 border border-white/10 rounded-xl p-3 space-y-2">
+                                  <div className="flex items-center justify-between">
+                                      <span className="text-[10px] font-bold text-pink-400 uppercase tracking-wider flex items-center gap-1.5">
+                                          <Sparkles className="w-3.5 h-3.5" /> Suno Voice Persona (Custom Singer / Clone)
+                                      </span>
+                                      <button 
+                                          type="button" 
+                                          onClick={() => setShowPersonaSettings(!showPersonaSettings)}
+                                          className="text-[10px] text-white/50 hover:text-white underline"
+                                      >
+                                          {showPersonaSettings ? "Hide Voice Settings" : "Configure Voice ID"}
+                                      </button>
+                                  </div>
+                                  {showPersonaSettings && (
+                                      <div className="space-y-2 pt-1 animate-in fade-in">
+                                          <p className="text-[10px] text-white/40">Enter a Suno Persona / Voice ID to generate with a specific cloned voice or consistent artist profile.</p>
+                                          <input 
+                                              type="text" 
+                                              value={coverPersonaId} 
+                                              onChange={(e) => setCoverPersonaId(e.target.value)} 
+                                              placeholder="e.g. persona_abc123 or Voice Profile ID" 
+                                              className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs outline-none focus:border-pink-500 text-white"
+                                          />
+                                      </div>
+                                  )}
+                              </div>
 
-                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-bold text-white/60 uppercase">Style Weight ({coverStyleWeight})</label>
-                                    <input type="range" min="0" max="1" step="0.01" value={coverStyleWeight} onChange={(e) => setCoverStyleWeight(parseFloat(e.target.value))} className="w-full accent-pink-500" />
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-bold text-white/60 uppercase">Audio Weight ({coverAudioWeight})</label>
-                                    <input type="range" min="0" max="1" step="0.01" value={coverAudioWeight} onChange={(e) => setCoverAudioWeight(parseFloat(e.target.value))} className="w-full accent-pink-500" />
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-bold text-white/60 uppercase">Weirdness ({coverWeirdnessConstraint})</label>
-                                    <input type="range" min="0" max="1" step="0.01" value={coverWeirdnessConstraint} onChange={(e) => setCoverWeirdnessConstraint(parseFloat(e.target.value))} className="w-full accent-pink-500" />
-                                </div>
-                             </div>
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                 <div className="space-y-1">
+                                     <label className="text-[10px] font-bold text-white/60 uppercase">Style Weight ({coverStyleWeight})</label>
+                                     <input type="range" min="0" max="1" step="0.01" value={coverStyleWeight} onChange={(e) => setCoverStyleWeight(parseFloat(e.target.value))} className="w-full accent-pink-500" />
+                                 </div>
+                                 <div className="space-y-1">
+                                     <label className="text-[10px] font-bold text-white/60 uppercase">Audio Weight ({coverAudioWeight})</label>
+                                     <input type="range" min="0" max="1" step="0.01" value={coverAudioWeight} onChange={(e) => setCoverAudioWeight(parseFloat(e.target.value))} className="w-full accent-pink-500" />
+                                 </div>
+                                 <div className="space-y-1">
+                                     <label className="text-[10px] font-bold text-white/60 uppercase">Weirdness ({coverWeirdnessConstraint})</label>
+                                     <input type="range" min="0" max="1" step="0.01" value={coverWeirdnessConstraint} onChange={(e) => setCoverWeirdnessConstraint(parseFloat(e.target.value))} className="w-full accent-pink-500" />
+                                 </div>
+                              </div>
 
-                             <div className="flex justify-end">
-                                 <button 
-                                     disabled={isCovering || !localSoundtrackUrl || !coverPrompt || !coverStyle || !coverTitle}
-                                     onClick={async () => {
-                                         if (localSoundtrackUrl.startsWith('blob:')) {
-                                              addLog("AI Cover generation requires a public URL. Local files are not supported.", "error");
-                                              return;
-                                         }
-                                         if (apiKeySource === 'custom' && !apiKeys.kie) {
-                                              addLog("You need to set a custom Kie AI API key to use Suno generations.", "error");
-                                              setShowKeyVault(true);
-                                              return;
-                                         }
-                                         if (apiKeySource === 'builtin') {
-                                              addLog("Built-in API key does not support Suno generations. Please enter your Kie AI API key.", "error");
-                                              setShowKeyVault(true);
-                                              return;
-                                         }
-                                         
-                                         try {
-                                             setCurrentCoverTaskId('');
-                                             setIsCovering(true);
-                                             setCoverStatus("Initiating AI Cover Generation...");
-                                             addLog("Initiating AI Cover Generation...", "info");
-                                             const results = await generateSunoCover({
-                                                 uploadUrl: localSoundtrackUrl, 
-                                                 prompt: coverPrompt, 
-                                                 style: coverStyle, 
-                                                 title: coverTitle, 
-                                                 apiKey: apiKeys.kie!, 
-                                                 addLog,
-                                                 onStatus: setCoverStatus,
-                                                 onTaskId: setCurrentCoverTaskId,
-                                                 negativeTags: coverNegativeTags,
-                                                 vocalGender: coverVocalGender,
-                                                 styleWeight: coverStyleWeight,
-                                                 weirdnessConstraint: coverWeirdnessConstraint,
-                                                 audioWeight: coverAudioWeight
-                                             });
-                                             if (results && results.length > 0) {
-                                                 setLocalSoundtrackUrl(results[0].url);
-                                                 setProjectData(p => ({ ...p, soundtrackUrl: results[0].url, localPlaylist: results, currentTrackIndex: 0, localFiles: undefined }));
-                                                 setIsPlaying(true);
-                                                 addLog(`AI Cover generated successfully! ${results.length} track(s) loaded into player.`, "success");
-                                             } else {
-                                                 throw new Error("No audio tracks were returned.");
-                                             }
-                                         } catch (e: any) {
-                                             addLog(`Cover generation failed: ${e.message}`, "error");
-                                         } finally {
-                                             setIsCovering(false);
-                                             setCoverStatus('');
-                                         }
-                                     }}
-                                     className={`px-6 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${isCovering ? 'bg-white/10 text-white/40 cursor-not-allowed' : (!localSoundtrackUrl || !coverPrompt || !coverStyle || !coverTitle) ? 'bg-pink-900/40 text-white/40 cursor-not-allowed' : 'bg-pink-600 hover:bg-pink-500 text-white shadow-lg shadow-pink-900/20'}`}
-                                 >
-                                     {isCovering ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
-                                     {isCovering ? (coverStatus || 'Generating Cover...') : 'Generate AI Cover'}
-                                 </button>
+                              <div className="flex justify-end">
+                                  <button 
+                                      disabled={isCovering || !coverPrompt || !coverStyle || !coverTitle}
+                                      onClick={async () => {
+                                          if (apiKeySource === "custom" && !apiKeys.kie) {
+                                               addLog("You need to set a custom Kie AI API key to use Suno generations.", "error");
+                                               setShowKeyVault(true);
+                                               return;
+                                          }
+                                          if (apiKeySource === "builtin") {
+                                               addLog("Built-in API key does not support Suno generations. Please enter your Kie AI API key.", "error");
+                                               setShowKeyVault(true);
+                                               return;
+                                          }
+                                          
+                                          try {
+                                              setCurrentCoverTaskId("");
+                                              setIsCovering(true);
+                                              const actionName = (localSoundtrackUrl && !localSoundtrackUrl.startsWith("blob:")) ? "AI Song Cover" : "Original AI Music";
+                                              setCoverStatus(`Initiating ${actionName}...`);
+                                              addLog(`Initiating ${actionName} with Suno (${coverModel})...`, "info");
+                                              const results = await generateSunoCover({
+                                                  uploadUrl: (localSoundtrackUrl && !localSoundtrackUrl.startsWith("blob:")) ? localSoundtrackUrl : undefined, 
+                                                  prompt: coverPrompt, 
+                                                  style: coverStyle, 
+                                                  title: coverTitle, 
+                                                  model: coverModel,
+                                                  instrumental: coverInstrumental,
+                                                  apiKey: apiKeys.kie!, 
+                                                  addLog,
+                                                  onStatus: setCoverStatus,
+                                                  onTaskId: setCurrentCoverTaskId,
+                                                  negativeTags: coverNegativeTags,
+                                                  vocalGender: coverVocalGender,
+                                                  styleWeight: coverStyleWeight,
+                                                  weirdnessConstraint: coverWeirdnessConstraint,
+                                                  audioWeight: coverAudioWeight,
+                                                  personaId: coverPersonaId.trim() || undefined
+                                              });
+                                              if (results && results.length > 0) {
+                                                  setLocalSoundtrackUrl(results[0].url);
+                                                  setProjectData(p => ({ ...p, soundtrackUrl: results[0].url, localPlaylist: results, currentTrackIndex: 0, localFiles: undefined }));
+                                                  setIsPlaying(true);
+                                                  addLog(`AI track generated successfully! ${results.length} track(s) loaded into player.`, "success");
+                                              } else {
+                                                  throw new Error("No audio tracks were returned from Suno.");
+                                              }
+                                          } catch (e: any) {
+                                              addLog(`Suno generation failed: ${e.message}`, "error");
+                                          } finally {
+                                              setIsCovering(false);
+                                              setCoverStatus("");
+                                          }
+                                      }}
+                                      className={`px-6 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${isCovering ? "bg-white/10 text-white/40 cursor-not-allowed" : (!coverPrompt || !coverStyle || !coverTitle) ? "bg-pink-900/40 text-white/40 cursor-not-allowed" : "bg-pink-600 hover:bg-pink-500 text-white shadow-lg shadow-pink-900/20"}`}
+                                  >
+                                      {isCovering ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
+                                      {isCovering ? (coverStatus || "Generating Audio...") : ((localSoundtrackUrl && !localSoundtrackUrl.startsWith("blob:")) ? "Generate AI Cover" : "Generate Original Suno Track")}
+                                  </button>
                              </div>
                              
                              {currentCoverTaskId && (
@@ -2098,7 +2237,7 @@ export const App: React.FC = () => {
           
         </main>
 
-        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-black/95 backdrop-blur-md border-t border-white/10 z-50 safe-bottom-nav">
+        <div className="fixed bottom-0 left-0 right-0 bg-black/95 backdrop-blur-md border-t border-white/10 z-50 safe-bottom-nav">
             <div className="flex justify-around items-center bg-white/5 p-1 rounded-xl border border-white/5 overflow-x-auto custom-scrollbar">
                 <button onClick={() => setActiveTab('director')} className={`min-w-[44px] min-h-[44px] flex-1 flex flex-col items-center justify-center gap-1 py-1 rounded-lg text-[10px] font-bold transition-all ${activeTab === 'director' ? 'text-indigo-400 bg-indigo-500/10' : 'text-white/40 hover:text-white'}`}>
                     <LayoutGrid className="w-4 h-4" />

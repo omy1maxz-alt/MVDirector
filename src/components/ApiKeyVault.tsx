@@ -147,9 +147,14 @@ export const ApiKeyVault: React.FC<ApiKeyVaultProps> = ({ isOpen, onClose, curre
             )}
 
             {authError && (
-              <div className="p-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-300 flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-                <span>{authError}</span>
+              <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-xs text-red-300 space-y-2">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                  <span>{authError}</span>
+                </div>
+                <div className="text-[10px] text-white/50 pl-6 border-t border-white/5 pt-1.5 leading-relaxed">
+                  💡 <strong>No sign-in required:</strong> You can select <strong>"Custom API Keys"</strong> below and enter your Google Gemini or Kie.ai API keys to direct videos and generate music immediately without needing to log in.
+                </div>
               </div>
             )}
           </div>
