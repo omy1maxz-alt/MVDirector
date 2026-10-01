@@ -29,15 +29,38 @@ jobs:
           node-version: '22'
           cache: 'npm'
 
-      - name: Install & Build
+      - name: Install & Build Web App
         run: |
           npm install --legacy-peer-deps
           npm run build
 
-      - name: Setup Android Build Tools
-        uses: android-actions/setup-android@v3
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
         with:
-          api-level: 34
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK (Manual Install)
+        run: |
+          # Install system Android SDK
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq android-sdk android-sdk-platform-tools android-sdk-build-tools
+          
+          # Set environment variables
+          echo "ANDROID_SDK_ROOT=/usr/lib/android-sdk" >> $GITHUB_ENV
+          echo "ANDROID_HOME=/usr/lib/android-sdk" >> $GITHUB_ENV
+          echo "PATH=$PATH:/usr/lib/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_ENV
+
+      - name: Accept Android SDK Licenses
+        run: |
+          mkdir -p /usr/lib/android-sdk/licenses
+          echo -e "\n24333f8a63b6825ea9c5514f83c2829b004d1fee" > /usr/lib/android-sdk/licenses/android-sdk-license
+          echo -e "\n84831b9409646a918e30573bab4c9c91346d8abd" > /usr/lib/android-sdk/licenses/android-sdk-preview-license
+          echo -e "\nd56f5187479451eabf01fb78af6dfcb131b33910" > /usr/lib/android-sdk/licenses/google-android-sdk-license
+
+      - name: Install SDK Components
+        run: |
+          sdkmanager --sdk_root=/usr/lib/android-sdk "platforms;android-34" "build-tools;34.0.0" "platform-tools" --verbose 2>&1 | head -50
 
       - name: Setup Capacitor
         run: |
@@ -52,7 +75,8 @@ jobs:
         working-directory: ./android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew clean
+          ./gradlew assembleDebug --no-daemon --info
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
