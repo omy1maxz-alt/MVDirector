@@ -44,10 +44,20 @@ jobs:
           java-version: '17'
 
       - name: Setup Android SDK
-        uses: actions/setup-android@v3
-        with:
-          api-level: 34
-          build-tools-version: 34.0.0
+        run: |
+          echo "y" | sudo apt-get update
+          echo "y" | sudo apt-get install -y android-sdk android-sdk-platform-tools android-sdk-build-tools
+          
+      - name: Install Android Components via SDK Manager
+        run: |
+          export ANDROID_SDK_ROOT=/usr/lib/android-sdk
+          export PATH=$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin
+          
+          echo "Installing SDK components..."
+          yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT "platforms;android-34" "build-tools;34.0.0" "platform-tools" 2>&1 || true
+          
+          echo "Accepting licenses..."
+          yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses 2>&1 || true
 
       - name: Initialize & Sync Capacitor Android
         run: |
@@ -90,6 +100,8 @@ jobs:
           fi
 
       - name: Build Android Debug APK
+        env:
+          ANDROID_SDK_ROOT: /usr/lib/android-sdk
         working-directory: ./android
         run: |
           chmod +x gradlew
