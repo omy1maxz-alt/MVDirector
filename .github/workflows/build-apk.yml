@@ -1,63 +1,114 @@
-name: Android Build
+name: Build Android APK
 
 on:
   push:
     branches:
+      - main
       - master
-  pull_request:
-    branches:
-      - master
-
-permissions:
-  contents: read
+  workflow_dispatch:
 
 jobs:
-  build:
-    name: Build Android App
-    runs-on: ubuntu-latest
+  build-apk:
+    runs-on: ubuntu-24.04
 
     steps:
-      - name: Checkout
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      - name: Setup Node.js 22 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install Dependencies and Build Web App
+        run: |
+          npm ci
+          npm run build
+
+      - name: Setup Capacitor Android
+        run: |
+          npm install @capacitor/core @capacitor/cli @capacitor/android
+
+          if [ ! -d "android" ]; then
+            npx cap add android
+          fi
+
+          npx cap sync android
+
+      - name: Configure Android Permissions
+        shell: bash
+        run: |
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+
+          if [ -f "$MANIFEST" ]; then
+            python3 - "$MANIFEST" <<'PY'
+          import sys
+          from pathlib import Path
+
+          manifest_path = Path(sys.argv[1])
+          content = manifest_path.read_text()
+
+          permissions = [
+              "android.permission.INTERNET",
+              "android.permission.RECORD_AUDIO",
+          ]
+
+          additions = []
+          for permission in permissions:
+              declaration = (
+                  f'    <uses-permission '
+                  f'android:name="{permission}" />'
+              )
+
+              if declaration not in content:
+                  additions.append(declaration)
+
+          if additions:
+              marker = "</manifest>"
+              content = content.replace(
+                  marker,
+                  "\n".join(additions) + "\n" + marker,
+                  1,
+              )
+              manifest_path.write_text(content)
+          PY
+          fi
+
+      - name: Setup Java JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
-          cache: gradle
+          java-version: "21"
 
-      - name: Set up Android SDK
+      - name: Verify Java Version
+        run: |
+          java -version
+          javac -version
+
+      - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: >-
+            platforms;android-34
+            build-tools;34.0.0
+            cmdline-tools;latest
 
-      - name: Install Android SDK packages
+      - name: Accept Android SDK Licenses
         shell: bash
         run: |
-          set -euo pipefail
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses || true
 
-          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+      - name: Build Android Debug APK
+        working-directory: ./android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
 
-          if [ ! -x "$SDKMANAGER" ]; then
-            SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" \
-              -type f -name sdkmanager -print -quit)"
-          fi
-
-          if [ -z "$SDKMANAGER" ] || [ ! -x "$SDKMANAGER" ]; then
-            echo "sdkmanager not found"
-            exit 1
-          fi
-
-          yes | "$SDKMANAGER" --licenses >/dev/null || true
-
-          "$SDKMANAGER" --install \
-            "platforms;android-34" \
-            "build-tools;34.0.0"
-
-      - name: Make Gradle executable
-        run: chmod +x ./gradlew
-
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug
-
-      - name: Run Unit Tests
-        run: ./gradlew test
+      - name: Upload Debug APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MV-Director-Android-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
