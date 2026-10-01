@@ -2,6 +2,14 @@
 
 ## Technical Constraints & Patterns
 
+### 106. Firebase Cloud Firestore & Rules Deployment (`firestore.rules`, `firebase-blueprint.json`)
+- **Problem & Requirement:**
+  - Provision Firebase Firestore database and Authentication on project `gen-lang-client-0927402582` in region `asia-southeast1`.
+- **Architectural Solution:**
+  1. Provisioned Firestore and Authentication via `set_up_firebase`.
+  2. Deployed production security rules enforcing strict user isolation on `/users/{userId}/*` (`projects`, `plans`, `studio_chat`, `studio_chat_messages`, `brain`).
+  3. Validated blueprint schema in `firebase-blueprint.json`.
+
 ### 105. Mobile Android WebView Paste Drop & Capacitor Firebase Auth (`index.css`, `App.tsx`, `auth.ts`)
 - **Problem & Root Cause:**
   1. *Pasted text disappearing on phone:* Global `-webkit-user-select: none` on `html, body` broke Android WebView's native clipboard context menu (Paste/Select All) and cancelled IME input animations on MIUI/HyperOS devices. Furthermore, when users switched away to copy lyrics from another app, Android backgrounded or restarted the WebView Activity without flushing debounced auto-save timers, causing newly pasted text to be wiped by asynchronous DB reloads.

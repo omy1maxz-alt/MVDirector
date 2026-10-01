@@ -1,3 +1,8 @@
+### Added
+- **Firebase Provisioning & Security Rules Deployment**:
+  - Successfully provisioned Firebase Cloud Firestore and Authentication for project `gen-lang-client-0927402582` in region `asia-southeast1`.
+  - Deployed `firestore.rules` with user-scoped isolation (`/users/{userId}/*`), validating data ownership across projects, plans, chat sessions, and knowledge graphs.
+
 ### Fixed
 - **Mobile Clipboard Paste & State Persistence (`index.css`, `App.tsx`)**:
   - Removed global `-webkit-user-select: none` from `html, body` which previously blocked Android WebView native clipboard context menu (Paste/Select All) and cancelled IME input animations on MIUI/HyperOS devices.
